@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+
+    // common
+    <color name="black">#FF000000</color>
+    <color name="black_opacity30">#4D000000</color>
+    <color name="black_opacity50">#80000000</color>
+    <color name="black_opacity70">#CC000000</color>
+    <color name="black_opacity60">#99000000</color>
+    <color name="black_2">#121212</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="white_opacity70">#CCFFFFFF</color>
+    <color name="white_opacity10">#1AFFFFFF</color>
+    <color name="white_opacity30">#4DFFFFFF</color>
+    <color name="transparent">#00000000</color>
+    <color name="red">#FF0000</color>
+    <color name="red_opacity50">#80FF0000</color>
+    <color name="red_opacity70">#CCFF0000</color>
+    <color name="blue_x">#6AEDFD</color>
+
+    // app
+    <color name="commonBackground">#1B58B1</color>
+    <color name="commonBackground_opacity30">#4D1B58B1</color>
+    <color name="statusBarColor">#1B58B1</color>
+    <color name="navigationBarColor">#1B58B1</color>
+    <color name="mainBackground">#F5F5F5</color>
+    <color name="subBackground">#901B58B1</color>
+    <color name="dividerColor">#b9b9bb</color>
+    <color name="buttonBackground">#3B82F6</color>
+    <color name="fragmentBackground">#0F0D27</color>
+    <color name="subBackground2">#F2F8FF</color>
+    <color name="buttonBackground2">#dce8f7</color>
+    <color name="greenButton">#24C87D</color>
+
+    // blt
+    <color name="bltFarBg">#3AE099</color>
+    <color name="bltNearBg">#FBBA07</color>
+    <color name="bltCloseBg">#FF7070</color>
+
+    // infrared
+    <color name="infraredBlue">#992FE3E2</color>
+    <color name="infraredRed">#99FF0000</color>
+    <color name="infraredWhite">#99FFFFFF</color>
+    <color name="infraredBlueFilter">#802FE3E2</color>
+    <color name="infraredRedFilter">#80FF0000</color>
+    <color name="infraredWhiteFilter">#80FFFFFF</color>
+
+    // lens
+    <color name="bounding_box_color">#FF6F00</color>
+
+    // text
+    <color name="textGray">#888888</color>
+    <color name="textGray2">#656565</color>
+    <color name="textBlue">#007AFF</color>
+    <color name="textRed">#E54848</color>
+    <color name="textBlue2">#2FE3E2</color>
+
+    // splash
+    <color name="splash_circle_item">#2c63b7</color>
+    <color name="splashBackground">#1e58b1</color>
+
+    // native ads
+    <color name="nativeAds_des">#B3B3B3</color>
+    <color name="nativeAds_des_2">#616161</color>
+    <color name="nativeAds_buttonBg">#1B58B1</color>
+</resources>

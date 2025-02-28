@@ -1,0 +1,17 @@
+<resources>
+    <string name="app_name">GSAdUtils</string>
+    <string name="ad_attribution" translatable="false">Ad</string>
+    <string name="ad_inspector" translatable="false">Ad Inspector</string>
+    <string name="loading_ads">Loading ads…</string>
+    <string name="swipe_to_continue" translatable="false">Swipe to continue</string>
+    <string name="advertisement" translatable="false">ADVERTISEMENT</string>
+    <string name="ok" translatable="false">OK</string>
+
+    <!--  native ads  -->
+    <string name="open_uppercase" translatable="false">OPEN</string>
+    <string name="install_uppercase" translatable="false">INSTALL</string>
+    <string name="headline" translatable="false">Headline</string>
+    <string name="store" translatable="false">Store</string>
+    <string name="body" translatable="false">Body</string>
+    <string name="ad_uppercase" translatable="false">AD</string>
+</resources>

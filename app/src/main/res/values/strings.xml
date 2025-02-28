@@ -1,0 +1,82 @@
+<resources>
+    <string name="app_name">GSAdsExample</string>
+
+    <string name="get_started" translatable="false">Get Started</string>
+    <string name="next" translatable="false">Next</string>
+
+    <string name="more_app" translatable="false">https://play.google.com/store/apps/developer?id=Technology+Product+and+Service</string>
+    <string-array name="group_email">
+        <item>gsx.service268@gmail.com</item>
+    </string-array>
+
+
+    <string name="tv_year_title_des" translatable="false"><b>Start Free Trial and Plan</b></string>
+    <string name="tv_year_3_days_free_trial_then" translatable="false">Try 3 days for free then</string>
+    <string name="tv_year_price" translatable="false"><b>đ1,000,000/year</b></string>
+    <string name="tv_year_price_sale" translatable="false"><b>đ1,000,000/year</b></string>
+
+    <string name="tv_year_title" translatable="false"><b>Yearly</b></string>
+
+    <string name="tv_week_title" translatable="false"><b>Weekly</b></string>
+    <string name="tv_week_price" translatable="false"><b>đ500,000/week</b></string>
+
+    <string name="tv_lifetime_title" translatable="false"><b>Lifetime</b></string>
+    <string name="tv_lifetime_des" translatable="false">One-time purchase</string>
+    <string name="tv_lifetime_price" translatable="false"><b>đ2,000,000</b></string>
+
+    <string name="sub_text_des_1" translatable="false">
+    • One you confirm the purchase, your payment will be charged to your Google Account.
+    </string>
+    <string name="sub_text_des_2" translatable="false">
+    • Your subscription automatically renews unless auto-renew is turned off at least 24-hours before the end of the current period.
+    </string>
+    <string name="sub_text_des_3" translatable="false">
+    • Your account will be charged for renewal within 24-hours prior to the end of the current period.
+    </string>
+    <string name="sub_text_des_4" translatable="false">
+    • Subscription maybe managed by the user and auto-renewal maybe turned off by going to the user’s account setting after purchasing.
+    </string>
+    <string name="text_terms_of_use" translatable="false"><u>Terms of Use</u></string>
+    <string name="text_privacy_policy" translatable="false"><u>Privacy Policy</u></string>
+    <string name="sub_text_restore" translatable="false"><b>Restore</b></string>
+    <string name="sub_btn_subscribe_now" translatable="false">Subscribe Now</string>
+    <string name="license_key" translatable="false">MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqhilXPGzuCihiThMzHdw/XW9TE+Pp9eWDRTuWXTBiYcYtcCfFv7WE98jhEzgWusbp93o+W3NUCeDU3VbVxSOzE/8c4IMoo5pvdJqLQEHJOdX/wRig2BeTdmh0dJ4glQUWvDA7jA9UQIHrHUE8CR30IiDECrNM2Cb6+bbw5QuK+JTxMckBbDzkhlqWfy2KGZX7QkEkTs2EOXSkMwlDo4xF+rjY04n4WR21+WyUtVFCi+byvz3pEt9jJRcA7S5TnpsVqor9/0xPzHLd5egB3gv3Pj9G/BElrfMQ8LlsmcycjjC+SzSzdzKEVlJoqNTbn0CJlax/eYx53iNavHDqnLGIwIDAQAB</string>
+
+
+
+
+    <!--  AD Test  -->
+    <string-array name="banner_ad_unit_id" translatable="false">
+        <item>ca-app-pub-3940256099942544/9214589741</item>
+        <item>ca-app-pub-3940256099942544/9214589741</item>
+        <item>ca-app-pub-3940256099942544/9214589741</item>
+    </string-array>
+    <string-array name="interstitial_ad_unit_id" translatable="false">
+        <item>ca-app-pub-3940256099942544/1033173712</item>
+        <item>ca-app-pub-3940256099942544/1033173712</item>
+        <item>ca-app-pub-3940256099942544/1033173712</item>
+    </string-array>
+    <string name="reward_interstitial_ad_unit_id" translatable="false">ca-app-pub-3940256099942544/5354046379</string>
+    <string-array name="reward_ad_unit_id">
+        <item>ca-app-pub-3940256099942544/5224354917</item>
+        <item>ca-app-pub-3940256099942544/5224354917</item>
+        <item>ca-app-pub-3940256099942544/5224354917</item>
+        <item>ca-app-pub-3940256099942544/5224354917</item>
+        <item>ca-app-pub-3940256099942544/5224354917</item>
+    </string-array>
+    <string-array name="native_ad_unit_id" translatable="false">
+        <item>ca-app-pub-3940256099942544/2247696110</item>
+        <item>ca-app-pub-3940256099942544/2247696110</item>
+        <item>ca-app-pub-3940256099942544/2247696110</item>
+        <item>ca-app-pub-3940256099942544/2247696110</item>
+        <item>ca-app-pub-3940256099942544/2247696110</item>
+    </string-array>
+    <string-array name="open_ad_unit_id">
+        <item>ca-app-pub-3940256099942544/9257395921</item>
+        <item>ca-app-pub-3940256099942544/9257395921</item>
+        <item>ca-app-pub-3940256099942544/9257395921</item>
+        <item>ca-app-pub-3940256099942544/9257395921</item>
+    </string-array>
+    <string name="app_ad_id" translatable="false">ca-app-pub-3940256099942544~3347511713</string>
+
+</resources>
