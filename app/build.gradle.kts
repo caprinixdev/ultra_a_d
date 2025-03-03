@@ -58,7 +58,7 @@ dependencies {
     implementation ("androidx.multidex:multidex:2.0.1")
     implementation ("com.github.eriffanani:ContentLoader:1.2.0")
     implementation ("com.facebook.shimmer:shimmer:0.5.0@aar")
-//    implementation ("com.github.caprinixdev:ultra_a_d:1.0.0")
+//    implementation ("com.github.caprinixdev:ultra_a_d:1.0.1")
 
     implementation (project(":gsadutils"))
 }

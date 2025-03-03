@@ -3,6 +3,8 @@ package gs.ad.utils.ads
 import androidx.constraintlayout.widget.ConstraintLayout
 import com.google.android.gms.ads.MediaAspectRatio
 import com.google.android.gms.ads.nativead.NativeAdOptions
+import gs.ad.utils.ads.format.AdmBannerModel
+import gs.ad.utils.ads.format.AdmNativeAdModel
 import gs.ad.utils.utils.PreferencesManager
 
 class AdmManager(private val mAdmMachine: AdmMachine) {
@@ -108,6 +110,22 @@ class AdmManager(private val mAdmMachine: AdmMachine) {
         mAdmMachine.loadNativeAd(id, keyPosition, container, layoutId, isFullScreen, isVideoOption, isMutedVideo, mediaAspectRatio, nativeAdOptions)
     }
 
+    fun getNativeAdByAdId(adId: Int): AdmNativeAdModel?{
+        return mAdmMachine.getNativeAdByAdId(adId)
+    }
+
+    fun getNativeAdByKeyPosition(keyPosition: String): AdmNativeAdModel?{
+        return mAdmMachine.getNativeAdByKeyPosition(keyPosition)
+    }
+
+    fun hideNativeAdView(keyPosition: String? = null) {
+        mAdmMachine.hideNativeAdView(keyPosition)
+    }
+
+    fun showNativeAdView(keyPosition: String? = null) {
+        mAdmMachine.showNativeAdView(keyPosition)
+    }
+
     fun loadBannerAd(id: Int, keyPosition: String, container: ConstraintLayout) {
         mAdmMachine.loadBannerAd(id, keyPosition, container)
     }
@@ -123,12 +141,28 @@ class AdmManager(private val mAdmMachine: AdmMachine) {
         return this
     }
 
-    fun pauseBannerAdView() {
-        mAdmMachine.pauseBannerAdView()
+    fun hideBannerAdView(keyPosition: String? = null) {
+        mAdmMachine.hideBannerAdView(keyPosition)
     }
 
-    fun resumeBannerAdView() {
-        mAdmMachine.resumeBannerAdView()
+    fun showBannerAdView(keyPosition: String? = null) {
+        mAdmMachine.showBannerAdView(keyPosition)
+    }
+
+    fun pauseBannerAdView(keyPosition: String? = null) {
+        mAdmMachine.pauseBannerAdView(keyPosition)
+    }
+
+    fun resumeBannerAdView(keyPosition: String? = null) {
+        mAdmMachine.resumeBannerAdView(keyPosition)
+    }
+
+    fun getBannerAdByAdId(adId: Int): AdmBannerModel?{
+        return mAdmMachine.getBannerAdByAdId(adId)
+    }
+
+    fun getBannerAdByKeyPosition(keyPosition: String): AdmBannerModel?{
+        return mAdmMachine.getBannerAdByKeyPosition(keyPosition)
     }
 
     companion object {

@@ -16,16 +16,14 @@ import gs.ad.utils.ads.format.AdmBannerAd.Companion.TAG
 
 class AdmBannerModel(
     activity: Activity?,
-    keyPosition: String
+    keyPosition: String,
+    adId: Int
 ) : AdListener() {
     var keyPosition: String = ""
     var adContainerView: ConstraintLayout? = null
     var adView: AdView? = null
     var activity: Activity? = null
-    val nameActivity : String get() {
-        val act = this.activity ?: return ""
-        return act::class.java.simpleName
-    }
+    var currentId: Int = 0
 
     var onAdImpressionListener: ((keyPosition: String) -> Unit)? = null
     var onAdOpenedListener: ((keyPosition: String) -> Unit)? = null
@@ -34,6 +32,7 @@ class AdmBannerModel(
     var onAdFailToLoadedListener: ((keyPosition: String, errorType: AdmErrorType, errorMessage: String?) -> Unit)? = null
 
     init {
+        this.currentId = adId
         this.keyPosition = keyPosition
         this.activity = activity
     }

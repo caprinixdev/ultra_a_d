@@ -25,14 +25,16 @@ import gs.ad.utils.R
 import gs.ad.utils.ads.error.AdmErrorType
 import gs.ad.utils.ads.format.AdmNativeAd.Companion.TAG
 
-internal class AdmNativeAdModel(
+class AdmNativeAdModel(
     val context: Context,
-    keyPosition: String
+    keyPosition: String,
+    adId: Int
 ) : AdListener() {
     var keyPosition: String = ""
     var adContainerView: ConstraintLayout? = null
     var nativeAd: NativeAd? = null
     var nativeAdView: NativeAdView? = null
+    var currentAdId: Int = 0
 
     var onAdImpressionListener: ((keyPosition: String) -> Unit)? = null
     var onAdOpenedListener: ((keyPosition: String) -> Unit)? = null
@@ -42,6 +44,7 @@ internal class AdmNativeAdModel(
         null
 
     init {
+        this.currentAdId = adId
         this.keyPosition = keyPosition
     }
 

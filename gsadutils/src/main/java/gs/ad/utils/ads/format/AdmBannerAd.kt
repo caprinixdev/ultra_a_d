@@ -18,28 +18,9 @@ internal class AdmBannerAd(
 
     private var mListAdmModel: MutableList<AdmBannerModel> = ArrayList()
 
-    private val currentModel: AdmBannerModel?
-        get() {
-            val act = admMachine.getCurrentActivity()
-            val nameActivity = act::class.java.simpleName
-            val model =
-                mListAdmModel.stream().filter { md -> md.nameActivity == nameActivity }.findFirst()
-                    .orElse(null)
-            return model ?: currentModel()
-        }
 
-    private fun currentModel(): AdmBannerModel? {
-        val model = mListAdmModel.stream().filter { md -> md.adView?.isShown == true }.findFirst()
-            .orElse(null)
-        return model
-    }
 
-    private fun currentModelByKeyPosition(keyPosition: String): AdmBannerModel? {
-        val model =
-            mListAdmModel.stream().filter { md -> md.keyPosition == keyPosition }.findFirst()
-                .orElse(null)
-        return model
-    }
+
 
     private val listBannerAdUnitId: List<String> = listBannerAdUnitID
     private var countTier: Int = 0
@@ -72,7 +53,7 @@ internal class AdmBannerAd(
             return
         }
 
-        if(currentModelByKeyPosition(keyPosition) != null){
+        if(getAdByKeyPosition(keyPosition) != null){
             admMachine.onAdFailToLoaded(TYPE_ADS.BannerAd, keyPosition, AdmErrorType.AD_IS_EXISTED, null)
             return
         }
@@ -89,7 +70,15 @@ internal class AdmBannerAd(
 
 
         val act = admMachine.getCurrentActivity()
-        val admBannerModel = AdmBannerModel(act, keyPosition)
+
+        val unitAdId = if (id == -1) countTier else id
+        if (countTier >= listBannerAdUnitId.size - 1) {
+            countTier = 0
+        } else {
+            countTier++
+        }
+
+        val admBannerModel = AdmBannerModel(act, keyPosition, unitAdId)
 
         admBannerModel.onAdOpenedListener = { keyPos ->
             admMachine.onAdOpened(TYPE_ADS.BannerAd, keyPos)
@@ -111,43 +100,78 @@ internal class AdmBannerAd(
             admMachine.onAdClicked(TYPE_ADS.BannerAd, keyPos)
         }
 
-        val unitAdId = if (id == -1) countTier else id
-        if (countTier >= listBannerAdUnitId.size - 1) {
-            countTier = 0
-        } else {
-            countTier++
-        }
-
         admBannerModel.loadBanner(listBannerAdUnitId[unitAdId], adContainerView)
 
         mListAdmModel.add(admBannerModel)
     }
 
-
-    fun showAdView() {
-        resumeAdView()
-        currentModel?.adContainerView?.visibility = View.VISIBLE
-        currentModel?.adView?.visibility = View.VISIBLE
-    }
-
-    fun hideAdView() {
-        pauseAdView()
-        currentModel?.adContainerView?.visibility = View.GONE
-        currentModel?.adView?.visibility = View.GONE
-    }
-
-    fun pauseAdView() {
-        currentModel?.adView?.pause()
-    }
-
-    fun resumeAdView() {
-        currentModel?.adView?.resume()
-    }
-
-    fun destroyView(keyPosition: String = "") {
-        if (mListAdmModel.isEmpty()) return
+    fun getAdByAdId(adId: Int): AdmBannerModel?{
         val model =
-            if (keyPosition.isEmpty()) currentModel else currentModelByKeyPosition(keyPosition)
+            mListAdmModel.stream().filter { md -> md.currentId == adId }.findFirst()
+                .orElse(null)
+        return model
+    }
+
+    fun getAdByKeyPosition(keyPosition: String?): AdmBannerModel? {
+        val model =
+            mListAdmModel.stream().filter { md -> md.keyPosition == keyPosition }.findFirst()
+                .orElse(null)
+        return model
+    }
+
+    fun showAdView(keyPosition: String? = null) {
+        if(keyPosition == null){
+            resumeAdView()
+            mListAdmModel.forEach {
+                it.adContainerView?.visibility = View.VISIBLE
+                it.adView?.visibility = View.VISIBLE
+            }
+        }else{
+            resumeAdView(keyPosition)
+            val model = getAdByKeyPosition(keyPosition)
+            model?.adContainerView?.visibility = View.VISIBLE
+            model?.adView?.visibility = View.VISIBLE
+        }
+    }
+
+    fun hideAdView(keyPosition: String? = null) {
+        if(keyPosition == null) {
+            pauseAdView()
+            mListAdmModel.forEach {
+                it.adContainerView?.visibility = View.GONE
+                it.adView?.visibility = View.GONE
+            }
+        }else{
+            pauseAdView(keyPosition)
+            val model = getAdByKeyPosition(keyPosition)
+            model?.adContainerView?.visibility = View.GONE
+            model?.adView?.visibility = View.GONE
+        }
+    }
+
+    fun pauseAdView(keyPosition: String? = null) {
+        if(keyPosition == null) {
+            mListAdmModel.forEach {
+                it.adView?.pause()
+            }
+        }else{
+            getAdByKeyPosition(keyPosition)?.adView?.pause()
+        }
+    }
+
+    fun resumeAdView(keyPosition: String? = null) {
+        if(keyPosition == null) {
+            mListAdmModel.forEach {
+                it.adView?.resume()
+            }
+        }else{
+            getAdByKeyPosition(keyPosition)?.adView?.resume()
+        }
+    }
+
+    fun destroyView(keyPosition: String? = null) {
+        if(mListAdmModel.isEmpty())return
+        val model = getAdByKeyPosition(keyPosition)
         model?.adView?.destroy()
         model?.adView = null
 //        model?.textView = null

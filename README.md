@@ -13,7 +13,7 @@ Như hình:
 #### dependencies
 Cài thư viện
 ```gradle
-implementation("com.github.caprinixdev:ultra_a_d:1.0.0")
+implementation("com.github.caprinixdev:ultra_a_d:1.0.1")
 ```
 Thêm các thư viện
 ```gradle
@@ -97,13 +97,25 @@ BannerAd Lifecycle
 ```kotlin
 override fun onResume() {
      super.onResume()
-     mAdmManager.resumeBannerAdView()
+     mAdmManager.resumeBannerAdView(AdKeyPosition.BannerAd_ScMain.name)
 }
 
 override fun onPause() {
      super.onPause()
-     mAdmManager.pauseBannerAdView()
+     mAdmManager.pauseBannerAdView(AdKeyPosition.BannerAd_ScMain.name)
 }
+```
+
+BannerAd Model
+```kotlin
+mAdmManager.getBannerAdByAdId(0)
+mAdmManager.getBannerAdByKeyPosition(AdKeyPosition.BannerAd_ScMain.name)
+```
+
+Show or Hide BannerAd
+```kotlin
+mAdmManager.hideBannerAdView(AdKeyPosition.BannerAd_ScMain.name)
+mAdmManager.showBannerAdView(AdKeyPosition.BannerAd_ScMain.name)
 ```
 
 ### NativeAd
@@ -119,6 +131,18 @@ mAdmManager.preloadNativeAd(0, AdKeyPosition.NativeAd_ScOnBoard_1.name, isFullSc
 ```
 ```kotlin
 mAdmManager.applyNativeAdView(AdKeyPosition.NativeAd_ScOnBoard_1.name, adContainer, R.layout.layout_native_ad_full)
+```
+
+NativeAd Model
+```kotlin
+mAdmManager.getNativeAdByAdId(0)
+mAdmManager.getNativeAdByKeyPosition(AdKeyPosition.NativeAd_ScMain.name)
+```
+
+Show or Hide NativeAd
+```kotlin
+mAdmManager.showNativeAdView(AdKeyPosition.NativeAd_ScMain.name)
+mAdmManager.hideNativeAdView(AdKeyPosition.NativeAd_ScMain.name)
 ```
 
 ### InterstitialAd

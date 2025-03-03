@@ -23,14 +23,6 @@ internal class AdmNativeAd(
     listNativeAdUnitID: List<String>
 ) {
     private var mListAdmModel: MutableList<AdmNativeAdModel> = ArrayList()
-
-    private fun currentModelByKeyPosition(keyPosition: String): AdmNativeAdModel? {
-        val model =
-            mListAdmModel.stream().filter { md -> md.keyPosition == keyPosition }.findFirst()
-                .orElse(null)
-        return model
-    }
-
     private val listNativeAdUnitId: List<String> = listNativeAdUnitID
     private var countTier: Int = 0
 
@@ -94,7 +86,7 @@ internal class AdmNativeAd(
             return
         }
 
-        if (currentModelByKeyPosition(keyPosition) != null || currentModelByKeyPosition(keyPosition)?.nativeAd != null) {
+        if (getAdByKeyPosition(keyPosition) != null || getAdByKeyPosition(keyPosition)?.nativeAd != null) {
             admMachine.onAdFailToLoaded(
                 TYPE_ADS.NativeAd,
                 keyPosition,
@@ -124,7 +116,15 @@ internal class AdmNativeAd(
             return
         }
 
-        val admNativeAdModel = AdmNativeAdModel(context, keyPosition)
+        val unitAdId = if (id == -1) countTier else id
+
+        if (countTier >= listNativeAdUnitId.size - 1) {
+            countTier = 0
+        } else {
+            countTier++
+        }
+
+        val admNativeAdModel = AdmNativeAdModel(context, keyPosition, unitAdId)
 
         admNativeAdModel.onAdOpenedListener = { keyPos ->
             admMachine.onAdOpened(TYPE_ADS.NativeAd, keyPos)
@@ -147,14 +147,6 @@ internal class AdmNativeAd(
             admMachine.onAdClicked(TYPE_ADS.NativeAd, keyPos)
         }
 
-        val unitAdId = if (id == -1) countTier else id
-
-        if (countTier >= listNativeAdUnitId.size - 1) {
-            countTier = 0
-        } else {
-            countTier++
-        }
-
         admNativeAdModel.preloadAd(
             listNativeAdUnitId[unitAdId],
             isFullScreen,
@@ -172,7 +164,7 @@ internal class AdmNativeAd(
         adContainerView: ConstraintLayout,
         nativeAdView: NativeAdView
     ) {
-        val model = currentModelByKeyPosition(keyPosition) ?: return
+        val model = getAdByKeyPosition(keyPosition) ?: return
         if (model.nativeAd == null) {
             destroyView(keyPosition)
             return
@@ -256,7 +248,7 @@ internal class AdmNativeAd(
             return
         }
 
-        if (currentModelByKeyPosition(keyPosition) != null || currentModelByKeyPosition(keyPosition)?.nativeAd != null) {
+        if (getAdByKeyPosition(keyPosition) != null || getAdByKeyPosition(keyPosition)?.nativeAd != null) {
             admMachine.onAdFailToLoaded(
                 TYPE_ADS.NativeAd,
                 keyPosition,
@@ -286,7 +278,15 @@ internal class AdmNativeAd(
             return
         }
 
-        val admNativeAdModel = AdmNativeAdModel(context, keyPosition)
+        val unitAdId = if (id == -1) countTier else id
+
+        if (countTier >= listNativeAdUnitId.size - 1) {
+            countTier = 0
+        } else {
+            countTier++
+        }
+
+        val admNativeAdModel = AdmNativeAdModel(context, keyPosition, unitAdId)
 
         admNativeAdModel.onAdOpenedListener = { keyPos ->
             admMachine.onAdOpened(TYPE_ADS.NativeAd, keyPos)
@@ -302,20 +302,12 @@ internal class AdmNativeAd(
         }
 
         admNativeAdModel.onAdLoadedListener = { keyPos ->
-            currentModelByKeyPosition(keyPos)?.adContainerView?.visibility = VISIBLE
+            getAdByKeyPosition(keyPos)?.adContainerView?.visibility = VISIBLE
             admMachine.onAdLoaded(TYPE_ADS.NativeAd, keyPos)
         }
 
         admNativeAdModel.onAdClickedListener = { keyPos ->
             admMachine.onAdClicked(TYPE_ADS.NativeAd, keyPos)
-        }
-
-        val unitAdId = if (id == -1) countTier else id
-
-        if (countTier >= listNativeAdUnitId.size - 1) {
-            countTier = 0
-        } else {
-            countTier++
         }
 
         admNativeAdModel.loadAd(
@@ -332,23 +324,49 @@ internal class AdmNativeAd(
         mListAdmModel.add(admNativeAdModel)
     }
 
-    fun showAdView() {
-        mListAdmModel.forEach {
-            it.adContainerView?.visibility = VISIBLE
-            it.nativeAdView?.visibility = VISIBLE
+    fun getAdByKeyPosition(keyPosition: String?): AdmNativeAdModel? {
+        val model =
+            mListAdmModel.stream().filter { md -> md.keyPosition == keyPosition }.findFirst()
+                .orElse(null)
+        return model
+    }
+
+    fun getAdById(adId: Int): AdmNativeAdModel? {
+        val model =
+            mListAdmModel.stream().filter { md -> md.currentAdId == adId }.findFirst()
+                .orElse(null)
+        return model
+    }
+
+    fun showAdView(keyPosition: String? = null) {
+        if(keyPosition == null){
+            mListAdmModel.forEach {
+                it.adContainerView?.visibility = VISIBLE
+                it.nativeAdView?.visibility = VISIBLE
+            }
+        }else{
+            val model = getAdByKeyPosition(keyPosition)
+            model?.adContainerView?.visibility = VISIBLE
+            model?.nativeAdView?.visibility = VISIBLE
         }
     }
 
-    fun hideAdView() {
-        mListAdmModel.forEach {
-            it.adContainerView?.visibility = GONE
-            it.nativeAdView?.visibility = GONE
+    fun hideAdView(keyPosition: String? = null) {
+        if(keyPosition == null){
+            mListAdmModel.forEach {
+                it.adContainerView?.visibility = GONE
+                it.nativeAdView?.visibility = GONE
+            }
+        }else{
+            val model = getAdByKeyPosition(keyPosition)
+            model?.adContainerView?.visibility = GONE
+            model?.nativeAdView?.visibility = GONE
         }
     }
 
     fun destroyView(keyPosition: String = "") {
         if (mListAdmModel.isEmpty()) return
-        val model = currentModelByKeyPosition(keyPosition)
+        val model = getAdByKeyPosition(keyPosition)
 
         removeModel(model)
     }

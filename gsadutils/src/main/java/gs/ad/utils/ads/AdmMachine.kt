@@ -18,8 +18,10 @@ import com.google.android.gms.ads.nativead.NativeAdOptions
 import com.google.android.gms.ads.nativead.NativeAdView
 import gs.ad.utils.ads.error.AdmErrorType
 import gs.ad.utils.ads.format.AdmBannerAd
+import gs.ad.utils.ads.format.AdmBannerModel
 import gs.ad.utils.ads.format.AdmInterstitialAd
 import gs.ad.utils.ads.format.AdmNativeAd
+import gs.ad.utils.ads.format.AdmNativeAdModel
 import gs.ad.utils.ads.format.AdmOpenAd
 import gs.ad.utils.ads.format.AdmobRewardAd
 import gs.ad.utils.databinding.PopupLoadAdsBinding
@@ -386,6 +388,22 @@ class AdmMachine(
         } else mNativeAd.destroyView()
     }
 
+    fun getNativeAdByAdId(adId: Int): AdmNativeAdModel?{
+        return mNativeAd.getAdById(adId)
+    }
+
+    fun getNativeAdByKeyPosition(keyPosition: String): AdmNativeAdModel?{
+        return mNativeAd.getAdByKeyPosition(keyPosition)
+    }
+
+    fun hideNativeAdView(keyPosition: String? = null) {
+        mNativeAd.hideAdView(keyPosition)
+    }
+
+    fun showNativeAdView(keyPosition: String? = null) {
+        mNativeAd.showAdView(keyPosition)
+    }
+
     fun destroyNativeAdByKeyPosition(keyPosition: String) {
         mNativeAd.destroyView(keyPosition)
     }
@@ -399,23 +417,39 @@ class AdmMachine(
         else mBannerAd.destroyView()
     }
 
+    fun getBannerAdByAdId(adId: Int): AdmBannerModel?{
+        return mBannerAd.getAdByAdId(adId)
+    }
+
+    fun getBannerAdByKeyPosition(keyPosition: String): AdmBannerModel?{
+        return mBannerAd.getAdByKeyPosition(keyPosition)
+    }
+
     fun destroyBannerAdByKeyPosition(keyPosition: String) {
         mBannerAd.destroyView(keyPosition)
     }
 
-    fun pauseBannerAdView() {
-        mBannerAd.pauseAdView()
+    fun hideBannerAdView(keyPosition: String? = null) {
+        mBannerAd.hideAdView(keyPosition)
     }
 
-    fun resumeBannerAdView() {
-        mBannerAd.resumeAdView()
+    fun showBannerAdView(keyPosition: String? = null) {
+        mBannerAd.showAdView(keyPosition)
+    }
+
+    fun pauseBannerAdView(keyPosition: String? = null) {
+        mBannerAd.pauseAdView(keyPosition)
+    }
+
+    fun resumeBannerAdView(keyPosition: String? = null) {
+        mBannerAd.resumeAdView(keyPosition)
     }
 
     private fun showPopupNetworkError(
         isTestUMP: Boolean, hashID: String, gatherConsentFinished: () -> Unit
     ) {
         if (NetworkUtil.isNetworkAvailable(context)) return
-        AlertDialog.Builder(getCurrentActivity()!!).setTitle("Network error")
+        AlertDialog.Builder(getCurrentActivity()).setTitle("Network error")
             .setMessage("The connection to the network is impossible. Please check the status of your connection or try again in a few minutes.")
             .setCancelable(false).setPositiveButton(
                 "OK"
