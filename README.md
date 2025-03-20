@@ -258,7 +258,7 @@ PreferencesManager.getInstance().removeAds(true)
 PreferencesManager.getInstance().isRemoveAds()
 ```
 
-## Sử dụng isRemoveAds() để check remove ad:
+Sử dụng isRemoveAds() để check remove ad:
 
 # Sub
 ## Cách sử dụng
