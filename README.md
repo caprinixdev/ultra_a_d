@@ -251,14 +251,13 @@ OpenAd ở các màn **Splash, Subscription, OnBoard** ko nên hiện thì để
 ### Lưu ý
 Xem Reward Remove Ad sử dụng như sau, bỏ remove ad thì set ***false*** :
 ```kotlin
-PreferencesManager.getInstance().removeAds(true)
-```
-
-```kotlin
-PreferencesManager.getInstance().isRemoveAds()
+PreferencesManager.getInstance().removeAds(true) // false
 ```
 
 Sử dụng isRemoveAds() để check remove ad:
+```kotlin
+PreferencesManager.getInstance().isRemoveAds()
+```
 
 # Sub
 ## Cách sử dụng
