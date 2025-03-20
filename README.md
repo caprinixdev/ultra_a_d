@@ -193,7 +193,7 @@ Sử dụng ***countToShowAds*** với trường hợp đếm tương tác nhiê
     loopAds = 2,
 ){}
 ```
-Muốn reset lại số lần thì sử dụng:
+Muốn reset lại số lần thì sử dụng ***resetCounterAds*** ở ***AppOwner.kt*** :
 ```kotlin
 resetCounterAds(MainActivity.MAIN_COUNTER_AD)
 ```
