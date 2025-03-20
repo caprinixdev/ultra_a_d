@@ -1,101 +1,49 @@
 package gs.ad.gsadsexample
 
+import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
+import android.view.View.GONE
 import android.view.View.INVISIBLE
 import android.view.View.VISIBLE
 import android.widget.Toast
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import gs.ad.gsadsexample.ads.AdKeyPosition
 import gs.ad.gsadsexample.databinding.ActivityMainBinding
 import gs.ad.gsadsexample.sub.SubscriptionProductId
-import gs.ad.utils.ads.AdmManager
-import gs.ad.utils.ads.OnAdmListener
-import gs.ad.utils.ads.TYPE_ADS
-import gs.ad.utils.ads.error.AdmErrorType
+import gs.ad.utils.ads.format.AdmBannerAd
+import gs.ad.utils.ads.format.AdmInterstitialAd
+import gs.ad.utils.ads.format.AdmNativeAd
+import gs.ad.utils.ads.format.AdmRewardAd
 import gs.ad.utils.google_iab.BillingClientLifecycle
 import gs.ad.utils.google_iab.OnBillingListener
 import gs.ad.utils.google_iab.models.PurchaseInfo
 import gs.ad.utils.utils.GlobalVariables
 import gs.ad.utils.utils.PreferencesManager
 
-class MainActivity : AppCompatActivity(), OnAdmListener {
+class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
-    private val mAdmManager: AdmManager
-        get() {
-            return AppController.admBuilder.isMainActivity(this)
-        }
 
     private val mBillingClientLifecycle: BillingClientLifecycle?
         get() {
-            return AppController.billingClientLifecycle
+            return (application as AppOwner).mBillingClientLifecycle
         }
+
+    private var interShowActivity2: AdmInterstitialAd? = null
+    private var interCountAd: AdmInterstitialAd? = null
+    private var nativeAd: AdmNativeAd? = null
+    private var bannerAd: AdmBannerAd? = null
+    private var rewardedAdRemoveAd: AdmRewardAd? = null
 
     private var mLaunchSubForResult = registerForActivityResult<Intent, ActivityResult>(
         ActivityResultContracts.StartActivityForResult()
     ) {
         GlobalVariables.isShowSub = false
         checkSubToUpdateUI()
-    }
-
-    override fun onAdClosed(typeAds: TYPE_ADS, keyPosition: String) {
-        super.onAdClosed(typeAds, keyPosition)
-        when (typeAds) {
-            TYPE_ADS.BannerAd -> {}
-            TYPE_ADS.NativeAd -> {}
-            TYPE_ADS.OpenAd -> {}
-            TYPE_ADS.InterstitialAd -> {
-                if (keyPosition == AdKeyPosition.InterstitialAd_ScMain.name) {
-                    startActivity(Intent(this@MainActivity, MainActivity2::class.java))
-                } else if (keyPosition == AdKeyPosition.InterstitialAd_ScMain_CountShowAd.name) {
-                    Log.d(
-                        TAG,
-                        "Count Ads onAdClosed : " + mAdmManager.getCounterAds(AdKeyPosition.InterstitialAd_ScMain_CountShowAd.name)
-                    )
-                }
-            }
-
-            TYPE_ADS.RewardAd -> {
-                if (keyPosition == AdKeyPosition.RewardAd_ScMain_RemoveAd.name) {
-                    PreferencesManager.getInstance().removeAds(true)
-                    runOnUiThread {
-                        checkSubToUpdateUI()
-                    }
-                }
-            }
-        }
-    }
-
-    override fun onAdLoaded(typeAds: TYPE_ADS, keyPosition: String) {
-        super.onAdLoaded(typeAds, keyPosition)
-        when (typeAds) {
-            TYPE_ADS.BannerAd -> {}
-            TYPE_ADS.NativeAd -> stopShimmerLoading()
-            TYPE_ADS.OpenAd -> {}
-            TYPE_ADS.InterstitialAd -> {}
-            TYPE_ADS.RewardAd -> {}
-        }
-    }
-
-    override fun onAdFailToLoaded(
-        typeAds: TYPE_ADS,
-        keyPosition: String,
-        errorType: AdmErrorType,
-        errorMessage: String?
-    ) {
-        super.onAdFailToLoaded(typeAds, keyPosition, errorType, errorMessage)
-        when (typeAds) {
-            TYPE_ADS.BannerAd -> {}
-            TYPE_ADS.NativeAd -> stopShimmerLoading()
-            TYPE_ADS.OpenAd -> {}
-            TYPE_ADS.InterstitialAd -> {}
-            TYPE_ADS.RewardAd -> {}
-        }
     }
 
     private fun openPlayStoreAccount(packageName: String = "", sku: String = "") {
@@ -111,12 +59,74 @@ class MainActivity : AppCompatActivity(), OnAdmListener {
         }
     }
 
+    private fun setUpAd() {
+        bannerAd = AdmBannerAd(0, this)
+        bannerAd?.onAdFailToLoaded = { admErrorType, errorMessage ->
+            runOnUiThread {
+                Log.d(TAG, "xxxyyy " + admErrorType.name + "," + errorMessage)
+            }
+        }
+
+        interShowActivity2 = AdmInterstitialAd(0, this)
+        interShowActivity2?.onAdClosed = {
+            runOnUiThread {
+                startActivity(Intent(this@MainActivity, MainActivity2::class.java))
+            }
+        }
+        interShowActivity2?.onAdFailToLoaded = { admErrorType, errorMessage ->
+            runOnUiThread {
+                Log.d(TAG, "xxxyyy " + admErrorType.name + "," + errorMessage)
+            }
+        }
+
+        interCountAd = AdmInterstitialAd(1, this)
+        interCountAd?.onAdClosed = {
+            Log.d(
+                TAG,
+                "Count Ads onAdClosed : "
+            )
+        }
+        interCountAd?.onAdFailToLoaded = { admErrorType, errorMessage ->
+            runOnUiThread {
+                Log.d(TAG, "xxxyyy " + admErrorType.name + "," + errorMessage)
+            }
+        }
+
+        nativeAd = AdmNativeAd(1, applicationContext, false)
+        nativeAd?.onAdFailToLoaded = { admErrorType, errorMessage ->
+            runOnUiThread {
+                Log.d(TAG, "xxxyyy " + admErrorType.name + "," + errorMessage)
+                stopShimmerLoading()
+            }
+        }
+
+        nativeAd?.onAdLoaded = {
+            runOnUiThread {
+                stopShimmerLoading()
+            }
+        }
+
+        rewardedAdRemoveAd = AdmRewardAd(0, this)
+        rewardedAdRemoveAd?.onHaveReward = {
+            runOnUiThread {
+                PreferencesManager.getInstance().removeAds(true)
+                checkSubToUpdateUI()
+            }
+        }
+        rewardedAdRemoveAd?.onAdFailToLoaded = { admErrorType, errorMessage ->
+            runOnUiThread {
+                Log.d(TAG, "xxxyyy " + admErrorType.name + "," + errorMessage)
+            }
+        }
+    }
+
+    @SuppressLint("SetTextI18n")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        mAdmManager.setListener(this)
+        setUpAd()
 
         binding.button2.setOnClickListener {
             if (!PreferencesManager.getInstance().isSUB()) {
@@ -128,27 +138,24 @@ class MainActivity : AppCompatActivity(), OnAdmListener {
             }
         }
 
-//        mAdmManager.showOpenAd(3, AdKeyPosition.AppOpenAd_ScMain.name)
-
         binding.buttonCount.text = "Count to show ads"
-        mAdmManager.resetCounterAds(AdKeyPosition.InterstitialAd_ScMain_CountShowAd.name)
         binding.buttonCount.setOnClickListener {
             binding.buttonCount.text =
-                "Count to show ads " + (mAdmManager.getCounterAds(AdKeyPosition.InterstitialAd_ScMain_CountShowAd.name) + 1)
-            mAdmManager.countToShowInterstitialAd(
-                1,
-                AdKeyPosition.InterstitialAd_ScMain_CountShowAd.name,
-                firstShowAd = 3,
-                loopShowAd = 2
-            )
+                "Count to show ads " +
+                        (PreferencesManager.getInstance().getCounterAds(MAIN_COUNTER_AD) + 1)
+            interCountAd?.countToShowAds(
+                keyCounterAd = MAIN_COUNTER_AD,
+                startAds = 3,
+                loopAds = 2,
+            ){}
         }
 
         binding.button.setOnClickListener {
-            mAdmManager.showInterstitialAd(0, AdKeyPosition.InterstitialAd_ScMain.name)
+            interShowActivity2?.showPopupLoadAds { }
         }
 
         binding.button1.setOnClickListener {
-            mAdmManager.showRewardAd(0, AdKeyPosition.RewardAd_ScMain_RemoveAd.name)
+            rewardedAdRemoveAd?.showPopupLoadAds { }
         }
 
         mBillingClientLifecycle?.setListener(this, object : OnBillingListener {
@@ -163,6 +170,7 @@ class MainActivity : AppCompatActivity(), OnAdmListener {
 
     }
 
+    @SuppressLint("SetTextI18n")
     private fun checkSubToUpdateUI() {
         if (PreferencesManager.getInstance().isSUB()) {
             stopShimmerLoading()
@@ -184,30 +192,19 @@ class MainActivity : AppCompatActivity(), OnAdmListener {
     }
 
     private fun destroyAd() {
-        mAdmManager.destroyAdByKeyPosition(
-            TYPE_ADS.BannerAd,
-            AdKeyPosition.BannerAd_ScMain.name
-        )
-        mAdmManager.destroyAdByKeyPosition(
-            TYPE_ADS.NativeAd,
-            AdKeyPosition.NativeAd_ScMain.name
-        )
+        binding.bannerView.visibility = GONE
+        binding.nativeAdContainerView.visibility = GONE
+        nativeAd?.destroyNativeAd()
+        bannerAd?.destroyBanner()
     }
 
     private fun loadNativeAd() {
         startShimmerLoading()
-        mAdmManager
-            .loadNativeAd(
-                4,
-                AdKeyPosition.NativeAd_ScMain.name,
-                binding.nativeAdContainerView,
-                R.layout.layout_native_ad,
-                isFullScreen = false
-            )
+        nativeAd?.loadAd(binding.nativeAdContainerView, R.layout.layout_native_ad)
     }
 
     private fun loadBannerAd() {
-        mAdmManager.loadBannerAd(0, AdKeyPosition.BannerAd_ScMain.name, binding.bannerView)
+        bannerAd?.loadAd(binding.bannerView)
     }
 
     private fun startShimmerLoading() {
@@ -226,26 +223,27 @@ class MainActivity : AppCompatActivity(), OnAdmListener {
 
     override fun onResume() {
         super.onResume()
-        mAdmManager.resumeBannerAdView()
+        bannerAd?.resumeBanner()
     }
 
     override fun onPause() {
         super.onPause()
-        mAdmManager.pauseBannerAdView()
+        bannerAd?.pauseBanner()
     }
 
     override fun onDestroy() {
-        mAdmManager
-            .destroyAdByKeyPosition(TYPE_ADS.BannerAd, AdKeyPosition.BannerAd_ScMain.name)
-            .destroyAdByKeyPosition(TYPE_ADS.NativeAd, AdKeyPosition.NativeAd_ScMain.name)
-            .removeListener()
-            .removeMainActivity()
+        destroyAd()
+        interShowActivity2 = null
+        interCountAd = null
+        nativeAd = null
+        bannerAd = null
+        rewardedAdRemoveAd = null
         mBillingClientLifecycle?.removeListener(this)
-        AppController.terminateApp()
         super.onDestroy()
     }
 
     companion object {
-        val TAG = "MainActivity"
+        const val TAG = "MainActivity"
+        const val MAIN_COUNTER_AD = "MAIN_COUNTER_AD"
     }
 }

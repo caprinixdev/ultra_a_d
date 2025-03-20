@@ -49,12 +49,12 @@ class BillingClientLifecycle(
         return billingConnector.isReady
     }
 
-    internal fun connectBillingConnector() {
+    fun connectBillingConnector() {
         if (isReadyBillingConnector()) return
         billingConnector.connect()
     }
 
-    internal fun destroyBillingConnector() {
+    fun destroyBillingConnector() {
         billingConnector.release()
     }
 

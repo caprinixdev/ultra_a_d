@@ -6,12 +6,10 @@ import android.view.View
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
-import gs.ad.gsadsexample.ads.AdKeyPosition
+import gs.ad.gsadsexample.ads.GroupNativeAd
 import gs.ad.gsadsexample.databinding.ActivitySplashBinding
-import gs.ad.utils.ads.AdmManager
-import gs.ad.utils.ads.OnAdmListener
-import gs.ad.utils.ads.TYPE_ADS
-import gs.ad.utils.ads.error.AdmErrorType
+import gs.ad.utils.ads.AdmUMP
+import gs.ad.utils.ads.format.AdmNativeAd
 import gs.ad.utils.google_iab.BillingClientLifecycle
 import gs.ad.utils.google_iab.OnBillingListener
 import gs.ad.utils.google_iab.enums.ErrorType
@@ -27,16 +25,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class SplashActivity : AppCompatActivity(), OnAdmListener {
+class SplashActivity : AppCompatActivity() {
     private lateinit var binding: ActivitySplashBinding
-    private val mAdmManager: AdmManager
-        get() {
-            return AppController.admBuilder.getActivity(this)
-        }
     private val mBillingClientLifecycle: BillingClientLifecycle?
         get() {
-            return AppController.billingClientLifecycle
+            return (application as AppOwner).mBillingClientLifecycle
         }
+
+    private lateinit var ump: AdmUMP
 
     private var countLoadAd = 0
     private var totalLoadAd = 0
@@ -51,18 +47,15 @@ class SplashActivity : AppCompatActivity(), OnAdmListener {
     private var isInitUMP: Boolean = false
 
     private data class AdPreload(
-        val typeAds: TYPE_ADS,
         val id: Int,
-        val position: String,
         val isFullScreen: Boolean = false
     )
 
     private var adPosition: MutableList<AdPreload> = mutableListOf(
-//        AdPreload(TYPE_ADS.OpenAd, 3, ""),
-        AdPreload(TYPE_ADS.NativeAd, 0, AdKeyPosition.NativeAd_ScOnBoard_1.name),
-        AdPreload(TYPE_ADS.NativeAd, 1, AdKeyPosition.NativeAd_ScOnBoard_2.name),
-        AdPreload(TYPE_ADS.NativeAd, 2, AdKeyPosition.NativeAd_ScOnBoard_3.name, true),
-        AdPreload(TYPE_ADS.NativeAd, 3, AdKeyPosition.NativeAd_ScOnBoard_4.name),
+        AdPreload(0),
+        AdPreload(0),
+        AdPreload(0, true),
+        AdPreload(0),
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -71,6 +64,7 @@ class SplashActivity : AppCompatActivity(), OnAdmListener {
         binding = ActivitySplashBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        ump = AdmUMP(this)
         //reset onboard
         //PreferencesManager.getInstance().saveShowOnBoard(false)
 
@@ -83,13 +77,9 @@ class SplashActivity : AppCompatActivity(), OnAdmListener {
         //remove Ads
         //PreferencesManager.getInstance().removeAds(false)
 
-        AppController.init(applicationContext, resources)
-
         GlobalVariables.canShowOpenAd = false
         binding.splashProcessBar.visibility = View.GONE
         binding.splashProcessBar.progress = 0
-
-        mAdmManager.setListener(this@SplashActivity)
 
         mBillingClientLifecycle?.setListener(this, eventListener = object : OnBillingListener {
             override fun onProductDetailsFetched(productInfos: HashMap<String, ProductInfo>) {
@@ -110,10 +100,10 @@ class SplashActivity : AppCompatActivity(), OnAdmListener {
         checkNetwork()
     }
 
-    private fun checkNetwork(){
-        if(NetworkUtil.isNetworkAvailable(this)){
+    private fun checkNetwork() {
+        if (NetworkUtil.isNetworkAvailable(this)) {
             initFirstApp()
-        }else{
+        } else {
             AlertDialog.Builder(this)
                 .setTitle("No Internet Connection")
                 .setMessage("No Internet connection. Make sure that Wi-Fi or mobile data is turned on, then try again.")
@@ -128,7 +118,7 @@ class SplashActivity : AppCompatActivity(), OnAdmListener {
         }
     }
 
-    private fun initFirstApp(){
+    private fun initFirstApp() {
         isInitUMP = false
         if (mBillingClientLifecycle == null) {
             initUMP()
@@ -140,8 +130,10 @@ class SplashActivity : AppCompatActivity(), OnAdmListener {
     fun initUMP() {
         if (isInitUMP) return
         isInitUMP = true
-        mAdmManager.initUMP(gatherConsentFinished = {
-            loadProgress()
+        ump.initUMP(gatherConsentFinished = {
+            runOnUiThread {
+                loadProgress()
+            }
         })
     }
 
@@ -149,34 +141,45 @@ class SplashActivity : AppCompatActivity(), OnAdmListener {
         if (!PreferencesManager.getInstance().isSUB()) {
             val progressBar = binding.splashProcessBar
             progressBar.visibility = View.VISIBLE
-            if (PreferencesManager.getInstance()
-                    .isShowOnBoard()
-            ) adPosition.removeAll { it.typeAds == TYPE_ADS.NativeAd }
+
+            if (PreferencesManager.getInstance().isShowOnBoard()) {
+                adPosition.clear()
+                if (adPosition.isEmpty()) countLoadAd += 1
+            }
 
             var countLoadedAd = 0
             var countProgress = 0
             totalLoadAd = adPosition.count()
             binding.splashProcessBar.max = maxProgress
 
-            adPosition.forEach {
-                when (it.typeAds) {
-                    TYPE_ADS.NativeAd -> mAdmManager.preloadNativeAd(
-                        it.id,
-                        it.position,
-                        it.isFullScreen
-                    )
+            adPosition.forEachIndexed { index, it ->
+                val admNativeAd = AdmNativeAd(
+                    it.id,
+                    applicationContext,
+                    it.isFullScreen
+                )
 
-                    TYPE_ADS.BannerAd -> TODO()
-                    TYPE_ADS.OpenAd -> mAdmManager.preloadOpenAd(it.id)
-                    TYPE_ADS.InterstitialAd -> TODO()
-                    TYPE_ADS.RewardAd -> TODO()
+                admNativeAd.tag = index
+
+                GroupNativeAd.listOnBoardNativeAd.add(admNativeAd)
+                admNativeAd.preloadAd()
+                admNativeAd.onAdLoaded = {
+                    countLoadAd += 1
+                }
+
+                admNativeAd.onAdFailToLoaded = { admErrorType, errorMessage ->
+                    runOnUiThread {
+                        countLoadAd += 1
+                    }
                 }
             }
 
             lifecycleScope.launch(Dispatchers.Main) {
                 val progressJob = async {
                     while (countProgress < maxProgress) {
-                        countProgress += 2
+                        val addProgress =
+                            if (PreferencesManager.getInstance().isShowOnBoard()) 2 else 1
+                        countProgress += addProgress
                         progressBar.progress = countProgress
                         delay(1)
                     }
@@ -206,21 +209,6 @@ class SplashActivity : AppCompatActivity(), OnAdmListener {
         return@withContext countLoadAd
     }
 
-    override fun onAdLoaded(typeAds: TYPE_ADS, keyPosition: String) {
-        super.onAdLoaded(typeAds, keyPosition)
-        countLoadAd += 1
-    }
-
-    override fun onAdFailToLoaded(
-        typeAds: TYPE_ADS,
-        keyPosition: String,
-        errorType: AdmErrorType,
-        errorMessage: String?
-    ) {
-        super.onAdFailToLoaded(typeAds, keyPosition, errorType, errorMessage)
-        countLoadAd += 1
-    }
-
     private fun startMainActivity() {
         val intent =
             if (PreferencesManager.getInstance().isShowOnBoard()) Intent(
@@ -230,7 +218,6 @@ class SplashActivity : AppCompatActivity(), OnAdmListener {
             else Intent(this, OnBoardActivity::class.java)
         MainScope().launch {
             startActivity(intent)
-            mAdmManager.removeListener()
             mBillingClientLifecycle?.removeListener(this@SplashActivity)
             finish()
         }

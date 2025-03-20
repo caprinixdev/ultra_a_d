@@ -1,7 +1,6 @@
 package gs.ad.gsadsexample
 
 import android.os.Bundle
-import android.util.Log
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import gs.ad.gsadsexample.databinding.ActivitySubscriptionBinding
@@ -11,19 +10,19 @@ import gs.ad.gsadsexample.sub.SubscriptionProductId
 import gs.ad.utils.google_iab.BillingClientLifecycle
 import gs.ad.utils.google_iab.OnBillingListener
 import gs.ad.utils.google_iab.enums.ErrorType
-import gs.ad.utils.google_iab.models.ProductInfo
 import gs.ad.utils.google_iab.models.PurchaseInfo
 import gs.ad.utils.utils.GlobalVariables
 import gs.ad.utils.utils.PreferencesManager
-import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.launch
 import java.util.Date
 
 class SubscriptionActivity : AppCompatActivity() {
     private var binding: ActivitySubscriptionBinding? = null
     private lateinit var myProductId: MyProductId
     var isRestoreSub: Boolean = false
-    private val mBillingClientLifecycle: BillingClientLifecycle? get() { return AppController.billingClientLifecycle }
+    private val mBillingClientLifecycle: BillingClientLifecycle?
+        get() {
+            return (application as AppOwner).mBillingClientLifecycle
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

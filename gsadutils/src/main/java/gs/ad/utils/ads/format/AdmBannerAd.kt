@@ -1,183 +1,177 @@
 package gs.ad.utils.ads.format
 
-import android.content.Context
+import android.app.Activity
+import android.os.Build
+import android.util.Log
 import android.view.View
+import android.view.WindowMetrics
 import androidx.constraintlayout.widget.ConstraintLayout
-import gs.ad.utils.ads.AdmMachine
-import gs.ad.utils.ads.TYPE_ADS
+import com.google.android.gms.ads.AdListener
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.AdSize
+import com.google.android.gms.ads.AdView
+import com.google.android.gms.ads.LoadAdError
+import gs.ad.utils.ads.AdmConfigAdId
+import gs.ad.utils.ads.GoogleMobileAdsConsentManager
 import gs.ad.utils.ads.error.AdmErrorType
 import gs.ad.utils.utils.NetworkUtil
 import gs.ad.utils.utils.PreferencesManager
 
+class AdmBannerAd(
+    private val id: Int,
+    private val currentActivity: Activity,
+    private val customSize: AdSize? = null
+) : AdListener() {
+    var tag = 0
 
-internal class AdmBannerAd(
-    private val context: Context,
-    private val admMachine: AdmMachine,
-    listBannerAdUnitID: List<String>
-) {
+    private val googleMobileAdsConsentManager: GoogleMobileAdsConsentManager =
+        GoogleMobileAdsConsentManager.getInstance(currentActivity.applicationContext)
 
-    private var mListAdmModel: MutableList<AdmBannerModel> = ArrayList()
+    var adContainerView: ConstraintLayout? = null
+    var adView: AdView? = null
 
-
-
-
-
-    private val listBannerAdUnitId: List<String> = listBannerAdUnitID
-    private var countTier: Int = 0
+    var onAdFailToLoaded: ((AdmErrorType, String?) -> Unit?)? = null
+    var onAdLoaded: (() -> Unit)? = null
+    var onAdClosed: (() -> Unit)? = null
+    var onAdClicked: (() -> Unit)? = null
+    var onAdShow: (() -> Unit)? = null
 
 
-    fun loadBanner(id: Int = -1, keyPosition: String, adContainerView: ConstraintLayout) {
-//        destroyView(keyPosition)
-        if(listBannerAdUnitId.isEmpty()){
-            admMachine.onAdFailToLoaded(TYPE_ADS.BannerAd, keyPosition, AdmErrorType.LIST_AD_ID_IS_EMPTY, null)
+    // [START get_ad_size]
+    // Get the ad size with screen width.
+    private val adSize: AdSize
+        get() {
+            val act = currentActivity
+            val displayMetrics = act.resources.displayMetrics
+            val adWidthPixels =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    val windowMetrics: WindowMetrics = act.windowManager.currentWindowMetrics
+                    windowMetrics.bounds.width()
+                } else {
+                    displayMetrics.widthPixels
+                }
+            val density = displayMetrics.density
+            val adWidth = (adWidthPixels / density).toInt()
+            return AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(act, adWidth)
+        }
+
+    fun loadAd(adContainerView: ConstraintLayout) {
+        if (AdmConfigAdId.listBannerAdUnitID.isEmpty()){
+            onAdFailToLoaded?.invoke(AdmErrorType.LIST_AD_ID_IS_EMPTY, null)
             return
         }
 
-        if(id >= listBannerAdUnitId.count()){
-            admMachine.onAdFailToLoaded(TYPE_ADS.BannerAd, keyPosition, AdmErrorType.AD_ID_IS_NOT_EXIST, null)
+        if (id >= AdmConfigAdId.listBannerAdUnitID.count()){
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_ID_IS_NOT_EXIST, null)
             return
         }
 
-        if(!NetworkUtil.isNetworkAvailable(context)){
-            admMachine.onAdFailToLoaded(TYPE_ADS.BannerAd, keyPosition, AdmErrorType.NETWORK_IS_NOT_AVAILABLE, null)
+        if (adView != null) {
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_EXISTED, null)
             return
         }
 
-        if(admMachine.getCurrentActivity().isFinishing){
-            admMachine.onAdFailToLoaded(TYPE_ADS.BannerAd, keyPosition, AdmErrorType.ACTIVITY_IS_FINISHING, null)
+        if (!NetworkUtil.isNetworkAvailable(currentActivity.applicationContext)) {
+            onAdFailToLoaded?.invoke(AdmErrorType.NETWORK_IS_NOT_AVAILABLE, null)
             return
         }
 
-        if(admMachine.getCurrentActivity().isDestroyed){
-            admMachine.onAdFailToLoaded(TYPE_ADS.BannerAd, keyPosition, AdmErrorType.ACTIVITY_IS_DESTROYED, null)
+        if (PreferencesManager.getInstance().isSUB()) {
+            onAdFailToLoaded?.invoke(AdmErrorType.CLIENT_HAVE_SUB, null)
             return
         }
 
-        if(getAdByKeyPosition(keyPosition) != null){
-            admMachine.onAdFailToLoaded(TYPE_ADS.BannerAd, keyPosition, AdmErrorType.AD_IS_EXISTED, null)
+        if (PreferencesManager.getInstance().isRemoveAds()) {
+            onAdFailToLoaded?.invoke(AdmErrorType.CLIENT_HAVE_BEEN_REMOVED_AD, null)
             return
         }
 
-        if(PreferencesManager.getInstance().isSUB()){
-            admMachine.onAdFailToLoaded(TYPE_ADS.BannerAd, keyPosition, AdmErrorType.CLIENT_HAVE_SUB, null)
+        if (!googleMobileAdsConsentManager.canRequestAds){
+            onAdFailToLoaded?.invoke(AdmErrorType.UMP_IS_NOT_ACTIVE, null)
             return
         }
 
-        if(PreferencesManager.getInstance().isRemoveAds()){
-            admMachine.onAdFailToLoaded(TYPE_ADS.BannerAd, keyPosition, AdmErrorType.CLIENT_HAVE_BEEN_REMOVED_AD, null)
-            return
-        }
+        val adUnitId = AdmConfigAdId.getBannerAdUnitID(id)
+        // Create a new ad view.
+        val adView = AdView(currentActivity)
+        val size = customSize ?: adSize
+        adView.setAdSize(size)
+        adView.adUnitId = adUnitId
+        adView.adListener = this
 
+//        val textView = TextView(act)
+//        textView.id = View.generateViewId()
+//        textView.textSize = (adSize.height / 4.0).toFloat()
+//        textView.text = act.resources.getString(R.string.loading_ads)
+//        textView.gravity = Gravity.CENTER
 
-        val act = admMachine.getCurrentActivity()
+        // Replace ad container with new ad view.
+        adContainerView.removeAllViews()
+        adContainerView.addView(adView)
+//        adContainerView.parent?.let {
+//            (it as ViewGroup).addView(textView)
+//        }
 
-        val unitAdId = if (id == -1) countTier else id
-        if (countTier >= listBannerAdUnitId.size - 1) {
-            countTier = 0
-        } else {
-            countTier++
-        }
-
-        val admBannerModel = AdmBannerModel(act, keyPosition, unitAdId)
-
-        admBannerModel.onAdOpenedListener = { keyPos ->
-            admMachine.onAdOpened(TYPE_ADS.BannerAd, keyPos)
-        }
-
-        admBannerModel.onAdImpressionListener = { keyPos ->
-            admMachine.onAdImpression(TYPE_ADS.BannerAd, keyPos)
-        }
-
-        admBannerModel.onAdFailToLoadedListener = { keyPos, errorType, errorMessage ->
-            admMachine.onAdFailToLoaded(TYPE_ADS.BannerAd, keyPos, errorType, errorMessage)
-        }
-
-        admBannerModel.onAdLoadedListener = { keyPos ->
-            admMachine.onAdLoaded(TYPE_ADS.BannerAd, keyPos)
-        }
-
-        admBannerModel.onAdClickedListener = { keyPos ->
-            admMachine.onAdClicked(TYPE_ADS.BannerAd, keyPos)
-        }
-
-        admBannerModel.loadBanner(listBannerAdUnitId[unitAdId], adContainerView)
-
-        mListAdmModel.add(admBannerModel)
+//        textView.updateLayoutParams<ConstraintLayout.LayoutParams> {
+//            height = 50
+//            width = 0
+//            startToStart = adContainerView.id
+//            endToEnd = adContainerView.id
+//            topToTop = adContainerView.id
+//            bottomToBottom = adContainerView.id
+//        }
+        // Start loading the ad in the background.
+        val adRequest = AdRequest.Builder().build()
+        adView.loadAd(adRequest)
+        adView.visibility = View.VISIBLE
+        adContainerView.visibility = View.VISIBLE
+//        textView.visibility = View.VISIBLE
+        this.adContainerView = adContainerView
+        this.adView = adView
     }
 
-    fun getAdByAdId(adId: Int): AdmBannerModel?{
-        val model =
-            mListAdmModel.stream().filter { md -> md.currentId == adId }.findFirst()
-                .orElse(null)
-        return model
+    fun resumeBanner(){
+        adView?.resume()
     }
 
-    fun getAdByKeyPosition(keyPosition: String?): AdmBannerModel? {
-        val model =
-            mListAdmModel.stream().filter { md -> md.keyPosition == keyPosition }.findFirst()
-                .orElse(null)
-        return model
+    fun pauseBanner(){
+        adView?.pause()
     }
 
-    fun showAdView(keyPosition: String? = null) {
-        if(keyPosition == null){
-            resumeAdView()
-            mListAdmModel.forEach {
-                it.adContainerView?.visibility = View.VISIBLE
-                it.adView?.visibility = View.VISIBLE
-            }
-        }else{
-            resumeAdView(keyPosition)
-            val model = getAdByKeyPosition(keyPosition)
-            model?.adContainerView?.visibility = View.VISIBLE
-            model?.adView?.visibility = View.VISIBLE
-        }
+    fun destroyBanner(){
+        adView?.destroy()
+        adView = null
     }
 
-    fun hideAdView(keyPosition: String? = null) {
-        if(keyPosition == null) {
-            pauseAdView()
-            mListAdmModel.forEach {
-                it.adContainerView?.visibility = View.GONE
-                it.adView?.visibility = View.GONE
-            }
-        }else{
-            pauseAdView(keyPosition)
-            val model = getAdByKeyPosition(keyPosition)
-            model?.adContainerView?.visibility = View.GONE
-            model?.adView?.visibility = View.GONE
-        }
+    override fun onAdOpened() {
+        super.onAdOpened()
+        Log.d(TAG, "bannerView onAdOpened")
     }
 
-    fun pauseAdView(keyPosition: String? = null) {
-        if(keyPosition == null) {
-            mListAdmModel.forEach {
-                it.adView?.pause()
-            }
-        }else{
-            getAdByKeyPosition(keyPosition)?.adView?.pause()
-        }
+    override fun onAdImpression() {
+        super.onAdImpression()
+        Log.d(TAG, "bannerView onAdShow")
+        onAdShow?.invoke()
     }
 
-    fun resumeAdView(keyPosition: String? = null) {
-        if(keyPosition == null) {
-            mListAdmModel.forEach {
-                it.adView?.resume()
-            }
-        }else{
-            getAdByKeyPosition(keyPosition)?.adView?.resume()
-        }
+    override fun onAdLoaded() {
+        super.onAdLoaded()
+        Log.d(TAG, "bannerView onAdLoaded")
+        adContainerView?.visibility = View.VISIBLE
+        adView?.visibility = View.VISIBLE
+        onAdLoaded?.invoke()
     }
 
-    fun destroyView(keyPosition: String? = null) {
-        if(mListAdmModel.isEmpty())return
-        val model = getAdByKeyPosition(keyPosition)
-        model?.adView?.destroy()
-        model?.adView = null
-//        model?.textView = null
-        model?.adContainerView?.removeAllViews()
-        model?.adContainerView?.visibility = View.GONE
-        mListAdmModel.remove(model)
+    override fun onAdClicked() {
+        // Called when a click is recorded for an ad.
+        Log.d(TAG, "bannerView onAdClicked")
+        onAdClicked?.invoke()
+    }
+
+    override fun onAdFailedToLoad(loadAdError: LoadAdError) {
+        super.onAdFailedToLoad(loadAdError)
+        Log.d(TAG, "bannerView " + loadAdError.message)
+        onAdFailToLoaded?.invoke(AdmErrorType.OTHER, loadAdError.message)
     }
 
     companion object {

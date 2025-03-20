@@ -1,13 +1,13 @@
 package gs.ad.gsadsexample
 
 import android.os.Bundle
+import android.view.View.GONE
 import androidx.appcompat.app.AppCompatActivity
-import gs.ad.gsadsexample.ads.AdKeyPosition
 import gs.ad.gsadsexample.databinding.ActivityMain2Binding
-import gs.ad.utils.ads.AdmManager
-import gs.ad.utils.ads.OnAdmListener
-import gs.ad.utils.ads.TYPE_ADS
-import gs.ad.utils.ads.error.AdmErrorType
+import gs.ad.utils.ads.format.AdmBannerAd
+import gs.ad.utils.ads.format.AdmInterstitialAd
+import gs.ad.utils.ads.format.AdmNativeAd
+import gs.ad.utils.ads.format.AdmRewardAd
 import gs.ad.utils.google_iab.BillingClientLifecycle
 import gs.ad.utils.google_iab.OnBillingListener
 import gs.ad.utils.google_iab.models.PurchaseInfo
@@ -16,14 +16,42 @@ import gs.ad.utils.utils.PreferencesManager
 
 class MainActivity2 : AppCompatActivity() {
     private lateinit var binding: ActivityMain2Binding
-    private val mAdmManager: AdmManager
-        get() {
-            return AppController.admBuilder.getActivity(this)
-        }
     private val mBillingClientLifecycle: BillingClientLifecycle?
         get() {
-            return AppController.billingClientLifecycle
+            return (application as AppOwner).mBillingClientLifecycle
         }
+
+    private var nativeAd: AdmNativeAd? = null
+    private var bannerAd: AdmBannerAd? = null
+    private var rewardedAd: AdmRewardAd? = null
+    private var interBackMainActivity: AdmInterstitialAd? = null
+
+
+    private fun setUpAd() {
+        bannerAd = AdmBannerAd(1, this)
+
+        interBackMainActivity = AdmInterstitialAd(1, this)
+        interBackMainActivity?.onAdClosed = {
+            runOnUiThread {
+                finish()
+            }
+        }
+
+        nativeAd = AdmNativeAd(3, applicationContext, false)
+
+        nativeAd?.onAdFailToLoaded = { admErrorType, errorMessage ->
+
+        }
+
+        nativeAd?.onAdLoaded = {
+
+        }
+
+        rewardedAd = AdmRewardAd(1, this)
+        rewardedAd?.onHaveReward = {
+
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,85 +67,52 @@ class MainActivity2 : AppCompatActivity() {
             }
         })
 
-        mAdmManager.setListener(object : OnAdmListener {
-            override fun onAdLoaded(typeAds: TYPE_ADS, keyPosition: String) {
-                super.onAdLoaded(typeAds, keyPosition)
-            }
-
-            override fun onAdClicked(typeAds: TYPE_ADS, keyPosition: String) {
-                super.onAdClicked(typeAds, keyPosition)
-            }
-
-            override fun onAdFailToLoaded(
-                typeAds: TYPE_ADS,
-                keyPosition: String,
-                errorType: AdmErrorType,
-                errorMessage: String?
-            ) {
-                super.onAdFailToLoaded(typeAds, keyPosition, errorType, errorMessage)
-            }
-
-            override fun onAdClosed(typeAds: TYPE_ADS, keyPosition: String) {
-                super.onAdClosed(typeAds, keyPosition)
-                if (typeAds == TYPE_ADS.InterstitialAd) {
-                    if (keyPosition == AdKeyPosition.InterstitialAd_ScMain2.name) {
-                        mAdmManager
-                            .destroyAdByKeyPosition(
-                                TYPE_ADS.NativeAd,
-                                AdKeyPosition.NativeAd_ScMain2.name
-                            )
-                            .destroyAdByKeyPosition(
-                                TYPE_ADS.BannerAd,
-                                AdKeyPosition.BannerAd_ScMain2.name
-                            )
-                            .removeListener()
-                        mBillingClientLifecycle?.removeListener(this@MainActivity2)
-                        finish()
-                    }
-                }
-            }
-        })
+        setUpAd()
 
         binding.button.setOnClickListener {
-            mAdmManager.showInterstitialAd(1, AdKeyPosition.InterstitialAd_ScMain2.name)
+            interBackMainActivity?.showPopupLoadAds { }
         }
 
         binding.button1.setOnClickListener {
-            mAdmManager.showRewardAd(2, AdKeyPosition.RewardAd_ScMain2.name)
+            rewardedAd?.showPopupLoadAds { }
         }
-
-        mAdmManager
-            .loadNativeAd(
-                1,
-                AdKeyPosition.NativeAd_ScMain2.name,
-                binding.nativeAdContainerView,
-                R.layout.layout_native_ad_origin,
-                isFullScreen = false
-            )
-
-        mAdmManager.loadBannerAd(1, AdKeyPosition.BannerAd_ScMain2.name, binding.bannerView)
     }
 
     override fun onResume() {
         super.onResume()
-        mAdmManager.resumeBannerAdView()
+        bannerAd?.resumeBanner()
     }
 
     override fun onPause() {
         super.onPause()
-        mAdmManager.pauseBannerAdView()
+        bannerAd?.pauseBanner()
+    }
+
+    private fun destroyAd() {
+        binding.bannerView.visibility = GONE
+        binding.nativeAdContainerView.visibility = GONE
+        nativeAd?.destroyNativeAd()
+        bannerAd?.destroyBanner()
+    }
+
+    override fun onDestroy() {
+        destroyAd()
+        nativeAd = null
+        bannerAd = null
+        rewardedAd = null
+        interBackMainActivity = null
+        mBillingClientLifecycle?.removeListener(this)
+        super.onDestroy()
     }
 
     private fun checkSubToUpdateUI() {
         if (PreferencesManager.getInstance().isSUB() || PreferencesManager.getInstance()
                 .isRemoveAds()
         ) {
-            mAdmManager.destroyAdByKeyPosition(
-                TYPE_ADS.NativeAd,
-                AdKeyPosition.NativeAd_ScMain2.name
-            )
+            destroyAd()
         } else {
-            //TODO
+            bannerAd?.loadAd(binding.bannerView)
+            nativeAd?.loadAd(binding.nativeAdContainerView, R.layout.layout_native_ad_origin)
         }
     }
 

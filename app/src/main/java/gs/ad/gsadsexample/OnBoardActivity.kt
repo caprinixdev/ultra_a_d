@@ -1,22 +1,19 @@
 package gs.ad.gsadsexample
 
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.addCallback
 import androidx.appcompat.app.AppCompatActivity
 import gs.ad.gsadsexample.adapter.OnboardPagerAdapter
-import gs.ad.gsadsexample.ads.AdKeyPosition
+import gs.ad.gsadsexample.ads.GroupNativeAd
 import gs.ad.gsadsexample.databinding.ActivityOnboardBinding
-import gs.ad.utils.ads.AdmManager
-import gs.ad.utils.ads.OnAdmListener
-import gs.ad.utils.ads.TYPE_ADS
 import gs.ad.utils.utils.GlobalVariables
 import gs.ad.utils.utils.PreferencesManager
 
-class OnBoardActivity : AppCompatActivity(), OnAdmListener{
+class OnBoardActivity : AppCompatActivity(){
     private var _binding: ActivityOnboardBinding? = null
     private val binding get() = _binding!!
     private var currentPos = 0
-    private val mAdmManager: AdmManager get() { return AppController.admBuilder.getActivity(this)}
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -25,34 +22,23 @@ class OnBoardActivity : AppCompatActivity(), OnAdmListener{
 
         GlobalVariables.canShowOpenAd = false
 
-        mAdmManager.setListener(object: OnAdmListener{
-            override fun onAdClicked(typeAds: TYPE_ADS, keyPosition: String) {
-                super.onAdClicked(typeAds, keyPosition)
-            }
-
-            override fun onAdShowed(typeAds: TYPE_ADS, keyPosition: String) {
-                super.onAdShowed(typeAds, keyPosition)
-            }
-        })
-
         onBackPressedDispatcher.addCallback {
             onBack()
         }
 
         setupAdapter()
-
-    }
-
-    fun removeListener(){
-        mAdmManager
-            .destroyAdByKeyPosition(TYPE_ADS.NativeAd, AdKeyPosition.NativeAd_ScOnBoard_1.name)
-            .destroyAdByKeyPosition(TYPE_ADS.NativeAd, AdKeyPosition.NativeAd_ScOnBoard_2.name)
-            .destroyAdByKeyPosition(TYPE_ADS.NativeAd, AdKeyPosition.NativeAd_ScOnBoard_3.name)
-            .destroyAdByKeyPosition(TYPE_ADS.NativeAd, AdKeyPosition.NativeAd_ScOnBoard_4.name)
-            .removeListener()
     }
 
     override fun onDestroy() {
+        val list = GroupNativeAd.listOnBoardNativeAd
+
+        list.forEachIndexed { index, admNativeAd ->
+            admNativeAd?.destroyNativeAd()
+            list[index] = null
+        }
+
+        list.clear()
+
         super.onDestroy()
         _binding = null
     }
@@ -79,7 +65,7 @@ class OnBoardActivity : AppCompatActivity(), OnAdmListener{
             )
         }
 
-        val adapter = OnboardPagerAdapter(this, items, admManager = mAdmManager)
+        val adapter = OnboardPagerAdapter(this, items)
         binding.onboardViewPager.adapter = adapter
     }
 

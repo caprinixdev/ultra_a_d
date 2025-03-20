@@ -50,7 +50,6 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 
-    //Admob Ads
     implementation ("com.google.android.gms:play-services-ads:23.5.0")
     implementation ("com.google.android.ump:user-messaging-platform:3.1.0")
 
@@ -58,6 +57,7 @@ dependencies {
     implementation ("androidx.multidex:multidex:2.0.1")
     implementation ("com.github.eriffanani:ContentLoader:1.2.0")
     implementation ("com.facebook.shimmer:shimmer:0.5.0@aar")
+    implementation ("androidx.lifecycle:lifecycle-process:2.8.7")
 //    implementation ("com.github.caprinixdev:ultra_a_d:1.0.1")
 
     implementation (project(":gsadutils"))

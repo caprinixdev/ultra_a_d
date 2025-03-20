@@ -15,7 +15,7 @@ import gs.ad.utils.utils.GlobalVariables
  * management platform) as one solution to capture consent for users in GDPR impacted countries.
  * This is an example and you can choose another consent management platform to capture consent.
  */
-internal class GoogleMobileAdsConsentManager private constructor(context: Context) {
+class GoogleMobileAdsConsentManager(context: Context) {
     private val consentInformation: ConsentInformation =
         UserMessagingPlatform.getConsentInformation(context)
 

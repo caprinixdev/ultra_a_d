@@ -23,6 +23,7 @@ implementation ("com.google.android.ump:user-messaging-platform:3.1.0")
 implementation ("androidx.multidex:multidex:2.0.1")
 implementation ("com.github.eriffanani:ContentLoader:1.2.0")
 implementation ("com.facebook.shimmer:shimmer:0.5.0@aar")
+implementation ("androidx.lifecycle:lifecycle-process:2.8.7")
 ```
 
 ## AndroidManifest
@@ -49,124 +50,191 @@ Copy các thẻ meta vào trong application
 ```
 
 ## Cách sử dụng
-Tạo 1 file **AdKeyPosition.kt** với cú pháp (tên Ad_Sc màn hình) màn hình có thể tên Activity hoặc Fragment ví dụ:
-```
-enum class AdKeyPosition {
-    AppOpenAd_App_From_Background,
+Tạo 1 **AppOwner.kt** như example và thêm ***<application android:name=".AppOwner"*** vào ***AndroidManifest.xml*** 
 
-    BannerAd_ScMain,
-    NativeAd_ScMain,
-    NativeAd_ScMain2,
-    InterstitialAd_ScMain,
-    RewardAd_ScMain,
-    InterstitialAd_ScMain2,
-    RewardAd_ScMain2,
-
-    NativeAd_ScOnBoard_1,
-    NativeAd_ScOnBoard_2,
-    NativeAd_ScOnBoard_3,
-    NativeAd_ScOnBoard_4
-}
-```
-Tạo 1 **AppController.kt** như hình:
-![plot](./images/AppController.png)
-
-Sử dụng **AdmManager** trong các Activity
+Phải khởi tạo UMP trước khi sử dụng Ad, nên dùng ở trong màn Splash
 ```kotlin
-private val mAdmManager: AdmManager get() { return AppController.admBuilder.getActivity(this) }
+private lateinit var ump: AdmUMP
+
+ump = AdmUMP(this)
+
+ump.initUMP(gatherConsentFinished = {
+    runOnUiThread {
+        //TODO: 
+    }
+})
 ```
-
-Nếu là Activity main ko finish thì khởi tạo như sau
-```kotlin
-private val mAdmManager: AdmManager get() { return AppController.admBuilder.isMainActivity(this) }
-```
-
-Thêm strU và nameF để lấy dữ liệu từ server
-![plot](./images/config_more.png)
-
-Phải khởi tạo ***AppController.init(applicationContext, resources)*** và UMP trước khi sử dụng Ad, nên dùng ở trong màn Splash
-![plot](./images/splash.png)
-
 ### BannerAd
 Gọi Load Ad:
 ```kotlin
-mAdmManager.loadBannerAd(0, AdKeyPosition.BannerAd_ScMain.name, binding.bannerView)
+private var bannerAd : AdmBannerAd? = null
+
+bannerAd = AdmBannerAd(id = 0, currentActivity = this)
+```
+
+Listener
+```kotlin
+bannerAd?.onAdFailToLoaded = { admErrorType, errorMessage ->
+    runOnUiThread {
+        Log.d(TAG, admErrorType.name + "," + errorMessage)
+    }
+}
 ```
 
 BannerAd Lifecycle
 ```kotlin
 override fun onResume() {
      super.onResume()
-     mAdmManager.resumeBannerAdView(AdKeyPosition.BannerAd_ScMain.name)
+     bannerAd?.resumeBanner()
 }
 
 override fun onPause() {
      super.onPause()
-     mAdmManager.pauseBannerAdView(AdKeyPosition.BannerAd_ScMain.name)
+     bannerAd?.pauseBanner()
 }
-```
 
-BannerAd Model
-```kotlin
-mAdmManager.getBannerAdByAdId(0)
-mAdmManager.getBannerAdByKeyPosition(AdKeyPosition.BannerAd_ScMain.name)
-```
-
-Show or Hide BannerAd
-```kotlin
-mAdmManager.hideBannerAdView(AdKeyPosition.BannerAd_ScMain.name)
-mAdmManager.showBannerAdView(AdKeyPosition.BannerAd_ScMain.name)
+override fun onDestroy() {
+    bannerAd?.destroyBanner()
+    bannerAd = null
+    super.onDestroy()
+}
 ```
 
 ### NativeAd
 Gọi Load Ad:
 ```kotlin
-mAdmManager.loadNativeAd(0, AdKeyPosition.NativeAd_ScMain2.name, binding.nativeAdContainerView, R.layout.layout_native_ad_origin,
-     isFullScreen = false
+private var nativeAd: AdmNativeAd? = null
+
+nativeAd = AdmNativeAd(id = 0, context = applicationContext, isFullScreen = false)
+nativeAd?.loadAd(binding.nativeAdContainerView, R.layout.layout_native_ad)
+```
+Dùng Preload Ad thì tạo 1 object list và dùng populateNativeAdView:
+```kotlin
+//preload
+object GroupNativeAd {
+    var listOnBoardNativeAd: MutableList<AdmNativeAd?> = mutableListOf()
+}
+
+val admNativeAd = AdmNativeAd(
+    id = 0,
+    context = applicationContext,
+    isFullScreen = false // true
+)
+
+admNativeAd.tag = 0 //để nhận biết ad
+
+GroupNativeAd.listOnBoardNativeAd.add(admNativeAd)
+
+//populateNativeAdView
+val nativeAd = GroupNativeAd.listOnBoardNativeAd[position]
+nativeAd?.populateNativeAdView(
+    adContainerView = adContainer,
+    layoutNativeAdView = R.layout.layout_native_ad_full
 )
 ```
-Gọi Preload và dùng ApplyView:
+
+Listener
 ```kotlin
-mAdmManager.preloadNativeAd(0, AdKeyPosition.NativeAd_ScOnBoard_1.name, isFullScreen = false)
-```
-```kotlin
-mAdmManager.applyNativeAdView(AdKeyPosition.NativeAd_ScOnBoard_1.name, adContainer, R.layout.layout_native_ad_full)
+nativeAd?.onAdFailToLoaded = { admErrorType, errorMessage ->
+    runOnUiThread {
+        Log.d(TAG, admErrorType.name + "," + errorMessage)
+    }
+}
 ```
 
-NativeAd Model
+Destroy Ad
 ```kotlin
-mAdmManager.getNativeAdByAdId(0)
-mAdmManager.getNativeAdByKeyPosition(AdKeyPosition.NativeAd_ScMain.name)
-```
+override fun onDestroy() {
+    //destroy list
+    val list = GroupNativeAd.listOnBoardNativeAd
 
-Show or Hide NativeAd
-```kotlin
-mAdmManager.showNativeAdView(AdKeyPosition.NativeAd_ScMain.name)
-mAdmManager.hideNativeAdView(AdKeyPosition.NativeAd_ScMain.name)
+    list.forEachIndexed { index, admNativeAd ->
+        admNativeAd?.destroyNativeAd()
+        list[index] = null
+    }
+
+    list.clear()
+    
+    //destroy nativeAd
+    nativeAd?.destroyNativeAd()
+    nativeAd = null
+    super.onDestroy()
+}
 ```
 
 ### InterstitialAd
+Show Ad
 ```kotlin
-mAdmManager.showInterstitialAd(0, AdKeyPosition.InterstitialAd_ScMain.name)
+private var interShowActivity2: AdmInterstitialAd? = null
+
+interShowActivity2 = AdmInterstitialAd(id = 0, currentActivity = this)
+interShowActivity2?.showPopupLoadAds { }
 ```
 
-Sử dụng ***countToShowInterstitialAd*** với trường hợp đếm tương tác nhiêu nút bấm trên 1 màn hình, với firstShowAd là số lần phải tương tác các nút bấm trong lần đầu tiên để show ad, loopShowAd là số lần khi tương tác lại các nút bấm đó để show lại ad :
+Listener
 ```kotlin
-mAdmManager.countToShowInterstitialAd(
-                0,
-                AdKeyPosition.InterstitialAd_ScMain_CountShowAd.name,
-                firstShowAd = 3,
-                loopShowAd = 2
-            )
+interShowActivity2?.onAdClosed = {
+    runOnUiThread {
+        startActivity(Intent(this@MainActivity, MainActivity2::class.java))
+        }
+    }
+
+interShowActivity2?.onAdFailToLoaded = { admErrorType, errorMessage ->
+    runOnUiThread {
+        Log.d(TAG, admErrorType.name + "," + errorMessage)
+    }
+}
+```
+Sử dụng ***countToShowAds*** với trường hợp đếm tương tác nhiêu nút bấm trên 1 màn hình, với firstShowAd là số lần phải tương tác các nút bấm trong lần đầu tiên để show ad, loopShowAd là số lần khi tương tác lại các nút bấm đó để show lại ad :
+```kotlin
+ interShowActivity2?.countToShowAds(
+    keyCounterAd = MAIN_COUNTER_AD,
+    startAds = 3,
+    loopAds = 2,
+){}
 ```
 Muốn reset lại số lần thì sử dụng:
 ```kotlin
-mAdmBuilder.resetCounterAds(AdKeyPosition.InterstitialAd_ScMain.name)
+resetCounterAds(MainActivity.MAIN_COUNTER_AD)
+```
+
+Destroy Ad
+```kotlin
+override fun onDestroy() {
+    interShowActivity2 = null
+    super.onDestroy()
+}
 ```
 
 ### RewardAd
 ```kotlin
-mAdmManager.showRewardAd(0, AdKeyPosition.RewardAd_ScMain.name)
+private var rewardedAdRemoveAd: AdmRewardAd? = null
+
+rewardedAdRemoveAd = AdmRewardAd(id = 0, currentActivity = this)
+```
+
+Listener
+```kotlin
+rewardedAdRemoveAd?.onHaveReward = {
+    runOnUiThread {
+        PreferencesManager.getInstance().removeAds(true)
+        checkSubToUpdateUI()
+    }
+}
+
+rewardedAdRemoveAd?.onAdFailToLoaded = { admErrorType, errorMessage ->
+    runOnUiThread {
+        Log.d(TAG, admErrorType.name + "," + errorMessage)
+    }
+}
+```
+
+Destroy Ad
+```kotlin
+override fun onDestroy() {
+    rewardedAdRemoveAd = null
+    super.onDestroy()
+}
 ```
 
 ### OpenAd
@@ -180,71 +248,7 @@ override fun onStart() {
 
 OpenAd ở các màn **Splash, Subscription, OnBoard** ko nên hiện thì để ***GlobalVariables.canShowOpenAd = false***
 
-**Lưu ý: Muốn sử dụng OpenAd ở các màn ko từ background thì dùng id từ 3 trở lên**
-
-
 ### Lưu ý
-Sử dụng setListener ở onCreate 1 activity như sau:
-```kotlin
-override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        mAdmManager.setListener(this)
-}
-```
-các hàm trong OnAdmListener:
-```kotlin
- mAdmManager.setListener(object: OnAdmListener {
-            override fun onAdLoaded(typeAds: TYPE_ADS, keyPosition: String) {
-                super.onAdLoaded(typeAds, keyPosition)
-            }
-
-            override fun onAdClicked(typeAds: TYPE_ADS, keyPosition: String) {
-                super.onAdClicked(typeAds, keyPosition)
-            }
-
-            override fun onAdClosed(typeAds: TYPE_ADS, keyPosition: String) {
-                super.onAdClosed(typeAds, keyPosition)
-            }
-
-            override fun onAdFailToLoaded(typeAds: TYPE_ADS, keyPosition: String, errorType: AdmErrorType, errorMessage: String?)
-            {
-                super.onAdFailToLoaded(typeAds, keyPosition, errorType, errorMessage)
-            }
-    
-            override fun onAdHaveReward(typeAds: TYPE_ADS, keyPosition: String) {
-                super.onAdHaveReward(typeAds, keyPosition)
-            }
-
-            override fun onAdNotHaveReward(typeAds: TYPE_ADS, keyPosition: String) {
-                super.onAdNotHaveReward(typeAds, keyPosition)
-            }
-
-            override fun onAdShowed(typeAds: TYPE_ADS, keyPosition: String) {
-                super.onAdShowed(typeAds, keyPosition)
-            }
-        })
-```
-
-Dùng ***removeListener*** trước finish 1 activity như sau:
-```kotlin
-     mAdmManager
-            .destroyAdByKeyPosition(TYPE_ADS.NativeAd, AdKeyPosition.NativeAd_ScMain2.name)
-            .removeListener()
-     finish()
-```
-
-Đối với activity main thì để trong ***onDestroy*** như sau:
-```kotlin
-     override fun onDestroy() {
-        mAdmManager
-            .destroyAdByKeyPosition(TYPE_ADS.BannerAd, AdKeyPosition.BannerAd_ScMain.name)
-            .destroyAdByKeyPosition(TYPE_ADS.NativeAd, AdKeyPosition.NativeAd_ScMain.name)
-            .removeListener()
-            .removeMainActivity()
-        super.onDestroy()
-    }
-```
-
 Xem Reward Remove Ad sử dụng như sau, bỏ remove ad thì set ***false*** :
 ```kotlin
 PreferencesManager.getInstance().removeAds(true)
@@ -254,7 +258,7 @@ PreferencesManager.getInstance().removeAds(true)
 PreferencesManager.getInstance().isRemoveAds()
 ```
 
-Sử dụng isRemoveAds() để check remove ad:
+## Sử dụng isRemoveAds() để check remove ad:
 
 # Sub
 ## Cách sử dụng
@@ -315,7 +319,4 @@ Sử dụng isSUB() để check sub:
 ```kotlin
 PreferencesManager.getInstance().isSUB()
 ```
-
-## Tải bản mẫu về xem
-https://github.com/ongan1234/gs_ad/archive/refs/heads/main.zip
 
