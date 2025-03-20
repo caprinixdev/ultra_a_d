@@ -96,6 +96,11 @@ class SplashActivity : AppCompatActivity() {
         checkNetwork()
     }
 
+    override fun onStart() {
+        super.onStart()
+        GlobalVariables.canShowOpenAd = false
+    }
+
     private fun checkNetwork() {
         if (NetworkUtil.isNetworkAvailable(this)) {
             initFirstApp()
