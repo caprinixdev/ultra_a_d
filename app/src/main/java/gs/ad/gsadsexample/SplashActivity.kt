@@ -82,10 +82,6 @@ class SplashActivity : AppCompatActivity() {
         binding.splashProcessBar.progress = 0
 
         mBillingClientLifecycle?.setListener(this, eventListener = object : OnBillingListener {
-            override fun onProductDetailsFetched(productInfos: HashMap<String, ProductInfo>) {
-                super.onProductDetailsFetched(productInfos)
-            }
-
             override fun onPurchasedProductsFetched(purchaseInfos: List<PurchaseInfo>) {
                 super.onPurchasedProductsFetched(purchaseInfos)
                 initUMP()

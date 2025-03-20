@@ -217,7 +217,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
-        mBillingClientLifecycle?.fetchSubPurchasedProducts()
         GlobalVariables.canShowOpenAd = true
     }
 

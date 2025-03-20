@@ -68,6 +68,7 @@ class AppOwner: MultiDexApplication(), Application.ActivityLifecycleCallbacks, D
 
     override fun onActivityStarted(p0: Activity) {
         admOpenAd.currentActivity = p0
+        mBillingClientLifecycle?.fetchSubPurchasedProducts()
     }
 
     override fun onActivityResumed(p0: Activity) {
