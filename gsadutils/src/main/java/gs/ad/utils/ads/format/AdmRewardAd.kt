@@ -53,7 +53,6 @@ class AdmRewardAd(
     private var isShowPopup: Boolean = false
     private var isCountAd: Boolean = false
     private var isLoadingAd = false
-    private var isShowingAd = false
 
     fun setNewId(newValue: Int) {
         id = newValue
@@ -129,12 +128,11 @@ class AdmRewardAd(
 
     private fun closeAds() {
         resetTimer()
+        GlobalVariables.isShowPopup = false
         onAdClosed?.invoke()
     }
 
     private fun resetTimer() {
-        GlobalVariables.isShowPopup = false
-        isShowingAd = false
         isCountAd = false
         isShowPopup = false
         timerTask?.cancel()
@@ -183,13 +181,8 @@ class AdmRewardAd(
             return
         }
 
-        if (isShowingAd) {
-            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_SHOWING, null)
-            return
-        }
-        isShowingAd = true
-
         if (canShowAds()) {
+            resetTimer()
             currentActivity.runOnUiThread {
                 delEventDialogLoadAds()
                 mRewardedAd?.show(currentActivity) { isReward = true }
