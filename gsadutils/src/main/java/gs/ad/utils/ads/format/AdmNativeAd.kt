@@ -51,6 +51,7 @@ class AdmNativeAd(
     var onAdShow: (() -> Unit)? = null
 
     private var isLoadingAd = false
+    private var isDestroyed = false
 
     fun preloadAd() {
         if (AdmConfigAdId.listNativeAdUnitID.isEmpty()){
@@ -97,6 +98,7 @@ class AdmNativeAd(
         val builder = AdLoader.Builder(context, adUnitId)
 
         builder.forNativeAd { nativeAd ->
+            if(isDestroyed) nativeAd.destroy()
             this.nativeAd = nativeAd
         }
 
@@ -164,6 +166,7 @@ class AdmNativeAd(
         builder.forNativeAd { nativeAd ->
             // You must call destroy on old ads when you are done with them,
             // otherwise you will have a memory leak.
+            if(isDestroyed) nativeAd.destroy()
             this.nativeAd = nativeAd
             populateNativeAdView(adContainerView, layoutNativeAdView)
         }
@@ -382,6 +385,7 @@ class AdmNativeAd(
     }
 
     fun destroyNativeAd(){
+        isDestroyed = true
         nativeAd?.destroy()
         nativeAd = null
     }
