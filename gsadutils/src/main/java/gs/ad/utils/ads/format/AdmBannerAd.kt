@@ -35,7 +35,7 @@ class AdmBannerAd(
     var onAdClosed: (() -> Unit)? = null
     var onAdClicked: (() -> Unit)? = null
     var onAdShow: (() -> Unit)? = null
-
+    private var isLoadingAd = false
 
     // [START get_ad_size]
     // Get the ad size with screen width.
@@ -90,6 +90,13 @@ class AdmBannerAd(
             onAdFailToLoaded?.invoke(AdmErrorType.UMP_IS_NOT_ACTIVE, null)
             return
         }
+
+        if (isLoadingAd) {
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_LOADING, null)
+            return
+        }
+        isLoadingAd = true
+
 
         val adUnitId = AdmConfigAdId.getBannerAdUnitID(id)
         // Create a new ad view.
@@ -157,6 +164,7 @@ class AdmBannerAd(
     override fun onAdLoaded() {
         super.onAdLoaded()
         Log.d(TAG, "bannerView onAdLoaded")
+        isLoadingAd = false
         adContainerView?.visibility = View.VISIBLE
         adView?.visibility = View.VISIBLE
         onAdLoaded?.invoke()
@@ -171,6 +179,7 @@ class AdmBannerAd(
     override fun onAdFailedToLoad(loadAdError: LoadAdError) {
         super.onAdFailedToLoad(loadAdError)
         Log.d(TAG, "bannerView " + loadAdError.message)
+        isLoadingAd = false
         onAdFailToLoaded?.invoke(AdmErrorType.OTHER, loadAdError.message)
     }
 

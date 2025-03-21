@@ -50,6 +50,8 @@ class AdmNativeAd(
     var onAdClicked: (() -> Unit)? = null
     var onAdShow: (() -> Unit)? = null
 
+    private var isLoadingAd = false
+
     fun preloadAd() {
         if (AdmConfigAdId.listNativeAdUnitID.isEmpty()){
             onAdFailToLoaded?.invoke(AdmErrorType.LIST_AD_ID_IS_EMPTY, null)
@@ -84,6 +86,12 @@ class AdmNativeAd(
             onAdFailToLoaded?.invoke(AdmErrorType.UMP_IS_NOT_ACTIVE, null)
             return
         }
+
+        if (isLoadingAd) {
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_LOADING, null)
+            return
+        }
+        isLoadingAd = true
 
         val adUnitId = AdmConfigAdId.getNativeAdUnitID(id)
         val builder = AdLoader.Builder(context, adUnitId)
@@ -142,6 +150,13 @@ class AdmNativeAd(
             onAdFailToLoaded?.invoke(AdmErrorType.UMP_IS_NOT_ACTIVE, null)
             return
         }
+
+        if (isLoadingAd) {
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_LOADING, null)
+            return
+        }
+
+        isLoadingAd = true
 
         val adUnitId = AdmConfigAdId.getNativeAdUnitID(id)
         val builder = AdLoader.Builder(context, adUnitId)
@@ -391,12 +406,14 @@ class AdmNativeAd(
     override fun onAdLoaded() {
         super.onAdLoaded()
         Log.d(TAG, "native ads onAdLoaded")
+        isLoadingAd = false
         onAdLoaded?.invoke()
     }
 
     override fun onAdFailedToLoad(p0: LoadAdError) {
         super.onAdFailedToLoad(p0)
         Log.d(TAG, "native ads onAdFailedToLoad " + p0.message)
+        isLoadingAd = false
         onAdFailToLoaded?.invoke(AdmErrorType.OTHER, p0.message)
     }
 

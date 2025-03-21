@@ -40,6 +40,7 @@ class AdmOpenAd(
     val hasUsing4Hours: Boolean get() = GlobalVariables.hasUsing4Hours
 
     private var loadTime: Long = 0
+    private var isLoadingAd = false
 
     private fun loadAds() {
         if (AdmConfigAdId.listOpenAdUnitID.isEmpty()){
@@ -76,6 +77,12 @@ class AdmOpenAd(
             return
         }
 
+        if (isLoadingAd) {
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_LOADING, null)
+            return
+        }
+        isLoadingAd = true
+
         val adUnitId = AdmConfigAdId.getOpenAdUnitID(id)
         val act = currentActivity ?: return
 
@@ -86,6 +93,7 @@ class AdmOpenAd(
                 override fun onAdLoaded(ad: AppOpenAd) {
                     // Called when an app open ad has loaded.
                     Log.d(TAG, "AppOpenAd Ad was loaded.")
+                    isLoadingAd = false
                     mOpenAd = ad
                     mOpenAd?.fullScreenContentCallback = this@AdmOpenAd
                     if (hasUsing4Hours) {
@@ -98,6 +106,7 @@ class AdmOpenAd(
                 override fun onAdFailedToLoad(loadAdError: LoadAdError) {
                     // Called when an app open ad has failed to load.
                     Log.d(TAG, loadAdError.message)
+                    isLoadingAd = false
                     resetAd()
                     onAdFailToLoaded?.invoke(
                         AdmErrorType.OTHER,

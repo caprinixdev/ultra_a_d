@@ -92,7 +92,7 @@ class SplashActivity : AppCompatActivity() {
                 initUMP()
             }
         })
-
+        isInitUMP = false
         checkNetwork()
     }
 
@@ -120,7 +120,6 @@ class SplashActivity : AppCompatActivity() {
     }
 
     private fun initFirstApp() {
-        isInitUMP = false
         if (mBillingClientLifecycle == null) {
             initUMP()
         } else {

@@ -53,6 +53,7 @@ class AdmRewardAd(
     private var isReward = false
     private var isShowPopup: Boolean = false
     private var isCountAd: Boolean = false
+    private var isLoadingAd = false
 
     private fun loadAds() {
         isReward = false
@@ -86,6 +87,12 @@ class AdmRewardAd(
             return
         }
 
+        if (isLoadingAd) {
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_LOADING, null)
+            return
+        }
+        isLoadingAd = true
+
         val adUnitId = AdmConfigAdId.getRewardAdUnitID(id)
         val adRequest = AdRequest.Builder().build()
 
@@ -93,6 +100,7 @@ class AdmRewardAd(
                 override fun onAdFailedToLoad(loadAdError: LoadAdError) {
                     // Handle the error.
                     Log.d(TAG, loadAdError.toString())
+                    isLoadingAd = false
                     onAdFailToLoaded?.invoke(
                         AdmErrorType.OTHER,
                         loadAdError.message
@@ -102,6 +110,7 @@ class AdmRewardAd(
                 }
 
                 override fun onAdLoaded(ad: RewardedAd) {
+                    isLoadingAd = false
                     mRewardedAd = ad
                     mRewardedAd?.fullScreenContentCallback = this@AdmRewardAd
                     onAdLoaded?.invoke()

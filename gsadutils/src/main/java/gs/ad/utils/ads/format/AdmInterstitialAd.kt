@@ -40,6 +40,7 @@ class AdmInterstitialAd(
     var onAdClosed: (() -> Unit)? = null
     var onAdClicked: (() -> Unit)? = null
     var onAdShow: (() -> Unit)? = null
+    private var isLoadingAd = false
 
     private var timer : Timer? = Timer()
     private var timerTask : TimerTask? = null
@@ -81,6 +82,12 @@ class AdmInterstitialAd(
             return
         }
 
+        if (isLoadingAd) {
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_LOADING, null)
+            return
+        }
+        isLoadingAd = true
+
         val adUnitId = AdmConfigAdId.getInterstitialAdUnitID(id)
         val adRequest = AdRequest.Builder().build()
         InterstitialAd.load(
@@ -90,7 +97,7 @@ class AdmInterstitialAd(
                     // The mInterstitialAd reference will be null until
                     // an ad is loaded.
                     Log.d(TAG, "InterstitialAd onAdLoaded")
-
+                    isLoadingAd = false
                     mInterstitialAd = interstitialAd
                     mInterstitialAd?.fullScreenContentCallback = this@AdmInterstitialAd
                     onAdLoaded?.invoke()
@@ -99,6 +106,7 @@ class AdmInterstitialAd(
                 override fun onAdFailedToLoad(loadAdError: LoadAdError) {
                     // Handle the error
                     Log.d(TAG, "InterstitialAd $loadAdError")
+                    isLoadingAd = false
                     mInterstitialAd = null
                     onAdFailToLoaded?.invoke(AdmErrorType.OTHER, loadAdError.message)
                     closeAds()
