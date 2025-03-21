@@ -37,7 +37,7 @@ class MainActivity2 : AppCompatActivity() {
             }
         }
 
-        nativeAd = AdmNativeAd(3, applicationContext, false)
+        nativeAd = AdmNativeAd(3, this, false)
 
         nativeAd?.onAdFailToLoaded = { admErrorType, errorMessage ->
 

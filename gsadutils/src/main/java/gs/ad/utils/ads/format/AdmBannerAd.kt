@@ -18,8 +18,8 @@ import gs.ad.utils.utils.NetworkUtil
 import gs.ad.utils.utils.PreferencesManager
 
 class AdmBannerAd(
-    private val id: Int,
-    private val currentActivity: Activity,
+    private var id: Int,
+    private var currentActivity: Activity,
     private val customSize: AdSize? = null
 ) : AdListener() {
     var tag = 0
@@ -37,6 +37,13 @@ class AdmBannerAd(
     var onAdShow: (() -> Unit)? = null
     private var isLoadingAd = false
 
+    fun setNewId(newValue: Int) {
+        id = newValue
+    }
+
+    fun setNewActivity(newValue: Activity){
+        currentActivity = newValue
+    }
     // [START get_ad_size]
     // Get the ad size with screen width.
     private val adSize: AdSize

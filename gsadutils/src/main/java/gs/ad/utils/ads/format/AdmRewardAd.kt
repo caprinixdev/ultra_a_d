@@ -21,11 +21,10 @@ import gs.ad.utils.utils.NetworkUtil
 import gs.ad.utils.utils.PreferencesManager
 import java.util.Timer
 import java.util.TimerTask
-import kotlin.concurrent.schedule
 
 class AdmRewardAd(
-    private val id: Int,
-    private val currentActivity: Activity
+    private var id: Int,
+    private var currentActivity: Activity
 ) : FullScreenContentCallback() {
     var tag = 0
 
@@ -42,8 +41,8 @@ class AdmRewardAd(
     var onHaveReward: (() -> Unit)? = null
     var onNotHaveReward: (() -> Unit)? = null
 
-    private var timer : Timer? = Timer()
-    private var timerTask : TimerTask? = null
+    private var timer: Timer? = Timer()
+    private var timerTask: TimerTask? = null
     private fun createTimerTask() = object : TimerTask() {
         override fun run() {
             showAds()
@@ -55,15 +54,23 @@ class AdmRewardAd(
     private var isCountAd: Boolean = false
     private var isLoadingAd = false
 
+    fun setNewId(newValue: Int) {
+        id = newValue
+    }
+
+    fun setNewActivity(newValue: Activity){
+        currentActivity = newValue
+    }
+
     private fun loadAds() {
         isReward = false
 
-        if (AdmConfigAdId.listRewardAdUnitID.isEmpty()){
+        if (AdmConfigAdId.listRewardAdUnitID.isEmpty()) {
             onAdFailToLoaded?.invoke(AdmErrorType.LIST_AD_ID_IS_EMPTY, null)
             return
         }
 
-        if (id >= AdmConfigAdId.listRewardAdUnitID.count()){
+        if (id >= AdmConfigAdId.listRewardAdUnitID.count()) {
             onAdFailToLoaded?.invoke(AdmErrorType.AD_ID_IS_NOT_EXIST, null)
             return
         }
@@ -97,26 +104,26 @@ class AdmRewardAd(
         val adRequest = AdRequest.Builder().build()
 
         RewardedAd.load(currentActivity, adUnitId, adRequest, object : RewardedAdLoadCallback() {
-                override fun onAdFailedToLoad(loadAdError: LoadAdError) {
-                    // Handle the error.
-                    Log.d(TAG, loadAdError.toString())
-                    isLoadingAd = false
-                    onAdFailToLoaded?.invoke(
-                        AdmErrorType.OTHER,
-                        loadAdError.message
-                    )
-                    mRewardedAd = null
-                    closeAds()
-                }
+            override fun onAdFailedToLoad(loadAdError: LoadAdError) {
+                // Handle the error.
+                Log.d(TAG, loadAdError.toString())
+                isLoadingAd = false
+                onAdFailToLoaded?.invoke(
+                    AdmErrorType.OTHER,
+                    loadAdError.message
+                )
+                mRewardedAd = null
+                closeAds()
+            }
 
-                override fun onAdLoaded(ad: RewardedAd) {
-                    isLoadingAd = false
-                    mRewardedAd = ad
-                    mRewardedAd?.fullScreenContentCallback = this@AdmRewardAd
-                    onAdLoaded?.invoke()
-                    Log.d(TAG, "Ad was loaded.")
-                }
-            })
+            override fun onAdLoaded(ad: RewardedAd) {
+                isLoadingAd = false
+                mRewardedAd = ad
+                mRewardedAd?.fullScreenContentCallback = this@AdmRewardAd
+                onAdLoaded?.invoke()
+                Log.d(TAG, "Ad was loaded.")
+            }
+        })
     }
 
     private fun closeAds() {
@@ -124,7 +131,7 @@ class AdmRewardAd(
         onAdClosed?.invoke()
     }
 
-    private fun resetTimer(){
+    private fun resetTimer() {
         GlobalVariables.isShowPopup = false
         isCountAd = false
         isShowPopup = false
@@ -169,7 +176,7 @@ class AdmRewardAd(
     }
 
     private fun showAds() {
-        if(PreferencesManager.getInstance().isRemoveAds()){
+        if (PreferencesManager.getInstance().isRemoveAds()) {
             closeAds()
             return
         }
@@ -192,7 +199,9 @@ class AdmRewardAd(
         loopAds: Int,
         onLoadingAd: (() -> Unit)?
     ) {
-        if (PreferencesManager.getInstance().isSUB() || PreferencesManager.getInstance().isRemoveAds()) {
+        if (PreferencesManager.getInstance().isSUB() || PreferencesManager.getInstance()
+                .isRemoveAds()
+        ) {
             closeAds()
             return
         }
@@ -226,7 +235,9 @@ class AdmRewardAd(
             closeAds()
             return
         }
-        if (isShowPopup) { return }
+        if (isShowPopup) {
+            return
+        }
         isShowPopup = true
 
         onLoadingAd?.invoke()

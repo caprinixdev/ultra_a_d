@@ -92,7 +92,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        nativeAd = AdmNativeAd(1, applicationContext, false)
+        nativeAd = AdmNativeAd(1, this, false)
         nativeAd?.onAdFailToLoaded = { admErrorType, errorMessage ->
             runOnUiThread {
                 Log.d(TAG, "xxxyyy " + admErrorType.name + "," + errorMessage)

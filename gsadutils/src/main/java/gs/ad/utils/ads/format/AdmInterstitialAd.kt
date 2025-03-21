@@ -25,8 +25,8 @@ import kotlin.concurrent.schedule
 import kotlin.concurrent.timerTask
 
 class AdmInterstitialAd(
-    private val id: Int,
-    private val currentActivity: Activity
+    private var id: Int,
+    private var currentActivity: Activity
 ) : FullScreenContentCallback() {
     var tag = 0
 
@@ -51,6 +51,14 @@ class AdmInterstitialAd(
     }
     private var isShowPopup: Boolean = false
     private var isCountAd: Boolean = false
+
+    fun setNewId(newValue: Int) {
+        id = newValue
+    }
+
+    fun setNewActivity(newValue: Activity){
+        currentActivity = newValue
+    }
 
     private fun loadAds() {
         if (AdmConfigAdId.listInterstitialAdUnitID.isEmpty()){

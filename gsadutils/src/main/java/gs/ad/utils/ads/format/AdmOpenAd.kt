@@ -21,12 +21,13 @@ import java.util.Date
 import java.util.Timer
 
 class AdmOpenAd(
-    private val id: Int,
-    private val context: Context
+    private var id: Int,
+    private val context: Context,
+    private var currentActivity: Activity? = null
 ) : FullScreenContentCallback() {
     var tag = 0
 
-    var currentActivity: Activity? = null
+
     private val googleMobileAdsConsentManager: GoogleMobileAdsConsentManager =
         GoogleMobileAdsConsentManager.getInstance(context)
     private var mOpenAd: AppOpenAd? = null
@@ -41,6 +42,14 @@ class AdmOpenAd(
 
     private var loadTime: Long = 0
     private var isLoadingAd = false
+
+    fun setNewId(newValue: Int) {
+        id = newValue
+    }
+
+    fun setNewActivity(newValue: Activity){
+        currentActivity = newValue
+    }
 
     private fun loadAds() {
         if (AdmConfigAdId.listOpenAdUnitID.isEmpty()){

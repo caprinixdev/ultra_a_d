@@ -9,7 +9,6 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.cardview.widget.CardView
 import androidx.constraintlayout.widget.ConstraintLayout
-import androidx.constraintlayout.widget.Group
 import androidx.recyclerview.widget.RecyclerView
 import gs.ad.gsadsexample.MainActivity
 import gs.ad.gsadsexample.OnBoardActivity
@@ -34,13 +33,17 @@ class OnboardPagerAdapter(
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
         return when (viewType) {
             TYPE_IMAGE -> {
-                val view = LayoutInflater.from(context).inflate(R.layout.adapter_onboard_page, parent, false)
+                val view = LayoutInflater.from(context)
+                    .inflate(R.layout.adapter_onboard_page, parent, false)
                 ImageViewHolder(view)
             }
+
             TYPE_NATIVE_AD -> {
-                val view = LayoutInflater.from(context).inflate(R.layout.adapter_native_ad_page, parent, false)
+                val view = LayoutInflater.from(context)
+                    .inflate(R.layout.adapter_native_ad_page, parent, false)
                 NativeAdViewHolder(view)
             }
+
             else -> throw IllegalArgumentException("Unsupported view type")
         }
     }
@@ -56,7 +59,8 @@ class OnboardPagerAdapter(
 
     class ImageViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         private val imageView: ImageView = view.findViewById(R.id.adapter_onboard_image)
-        private val adContainer: ConstraintLayout = view.findViewById(R.id.adapter_onboard_image_native_ad_frame)
+        private val adContainer: ConstraintLayout =
+            view.findViewById(R.id.adapter_onboard_image_native_ad_frame)
         private val dot1: CardView = view.findViewById(R.id.onboard_indicator_dot1)
         private val dot2: CardView = view.findViewById(R.id.onboard_indicator_dot2)
         private val dot3: CardView = view.findViewById(R.id.onboard_indicator_dot3)
@@ -65,7 +69,7 @@ class OnboardPagerAdapter(
         fun bind(position: Int, imageResId: Int) {
             imageView.setImageResource(imageResId)
 
-            if (!PreferencesManager.getInstance().isSUB()){
+            if (!PreferencesManager.getInstance().isSUB()) {
                 val nativeAd = GroupNativeAd.listOnBoardNativeAd[position]
                 nativeAd?.populateNativeAdView(
                     adContainer,
@@ -93,12 +97,14 @@ class OnboardPagerAdapter(
                     dot3.setCardBackgroundColor(itemView.resources.getColor(R.color.commonBackground))
                     next.setText(R.string.next)
                 }
+
                 R.drawable.onboard2 -> {
                     dot1.setCardBackgroundColor(itemView.resources.getColor(R.color.commonBackground))
                     dot2.setCardBackgroundColor(itemView.resources.getColor(R.color.blue_x))
                     dot3.setCardBackgroundColor(itemView.resources.getColor(R.color.commonBackground))
                     next.setText(R.string.next)
                 }
+
                 R.drawable.onboard3 -> {
                     dot1.setCardBackgroundColor(itemView.resources.getColor(R.color.commonBackground))
                     dot2.setCardBackgroundColor(itemView.resources.getColor(R.color.commonBackground))
@@ -110,10 +116,11 @@ class OnboardPagerAdapter(
     }
 
     class NativeAdViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-        private val adContainer: ConstraintLayout = view.findViewById(R.id.adapter_onboard_native_ad_frame)
+        private val adContainer: ConstraintLayout =
+            view.findViewById(R.id.adapter_onboard_native_ad_frame)
 
         fun bind(position: Int) {
-            if (!PreferencesManager.getInstance().isSUB()){
+            if (!PreferencesManager.getInstance().isSUB()) {
                 val nativeAd = GroupNativeAd.listOnBoardNativeAd[position]
                 nativeAd?.populateNativeAdView(
                     adContainer,

@@ -30,17 +30,18 @@ import gs.ad.utils.utils.NetworkUtil
 import gs.ad.utils.utils.PreferencesManager
 
 class AdmNativeAd(
-    private val id: Int,
-    private val context: Context,
-    private val isFullScreen: Boolean,
+    private var id: Int,
+    private var currentActivity: Activity,
+    private var isFullScreen: Boolean,
     private val isMutedVideo: Boolean = true,
     private val mediaAspectRatio: Int = MediaAspectRatio.PORTRAIT,
     private val nativeAdOptions: Int = NativeAdOptions.ADCHOICES_TOP_LEFT
 ) : AdListener() {
     var tag: Int = 0
+    private val nameActivity: String = currentActivity.javaClass.simpleName
 
     private val googleMobileAdsConsentManager: GoogleMobileAdsConsentManager =
-        GoogleMobileAdsConsentManager.getInstance(context)
+        GoogleMobileAdsConsentManager.getInstance(currentActivity)
 
     var nativeAd: NativeAd? = null
 
@@ -53,13 +54,25 @@ class AdmNativeAd(
     private var isLoadingAd = false
     private var isDestroyed = false
 
+    fun setNewId(newValue: Int) {
+        id = newValue
+    }
+
+    fun setNewActivity(newValue: Activity){
+        currentActivity = newValue
+    }
+
+    fun setNewIsFullScreen(newValue: Boolean){
+        isFullScreen = newValue
+    }
+
     fun preloadAd() {
-        if (AdmConfigAdId.listNativeAdUnitID.isEmpty()){
+        if (AdmConfigAdId.listNativeAdUnitID.isEmpty()) {
             onAdFailToLoaded?.invoke(AdmErrorType.LIST_AD_ID_IS_EMPTY, null)
             return
         }
 
-        if (id >= AdmConfigAdId.listNativeAdUnitID.count()){
+        if (id >= AdmConfigAdId.listNativeAdUnitID.count()) {
             onAdFailToLoaded?.invoke(AdmErrorType.AD_ID_IS_NOT_EXIST, null)
             return
         }
@@ -68,7 +81,7 @@ class AdmNativeAd(
             onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_EXISTED, null)
             return
         }
-        if (!NetworkUtil.isNetworkAvailable(context)) {
+        if (!NetworkUtil.isNetworkAvailable(currentActivity)) {
             onAdFailToLoaded?.invoke(AdmErrorType.NETWORK_IS_NOT_AVAILABLE, null)
             return
         }
@@ -83,7 +96,7 @@ class AdmNativeAd(
             return
         }
 
-        if (!googleMobileAdsConsentManager.canRequestAds){
+        if (!googleMobileAdsConsentManager.canRequestAds) {
             onAdFailToLoaded?.invoke(AdmErrorType.UMP_IS_NOT_ACTIVE, null)
             return
         }
@@ -93,12 +106,16 @@ class AdmNativeAd(
             return
         }
         isLoadingAd = true
-
+        Log.d(TAG, "id: $id")
         val adUnitId = AdmConfigAdId.getNativeAdUnitID(id)
-        val builder = AdLoader.Builder(context, adUnitId)
+        val builder = AdLoader.Builder(currentActivity, adUnitId)
 
         builder.forNativeAd { nativeAd ->
-            if(isDestroyed) nativeAd.destroy()
+            if (isDestroyed) {
+                Log.d(TAG, "Native Ad destroy : $nameActivity")
+                nativeAd.destroy()
+                return@forNativeAd
+            }
             this.nativeAd = nativeAd
         }
 
@@ -119,12 +136,12 @@ class AdmNativeAd(
     }
 
     fun loadAd(adContainerView: ConstraintLayout, layoutNativeAdView: Int) {
-        if (AdmConfigAdId.listNativeAdUnitID.isEmpty()){
+        if (AdmConfigAdId.listNativeAdUnitID.isEmpty()) {
             onAdFailToLoaded?.invoke(AdmErrorType.LIST_AD_ID_IS_EMPTY, null)
             return
         }
 
-        if (id >= AdmConfigAdId.listNativeAdUnitID.count()){
+        if (id >= AdmConfigAdId.listNativeAdUnitID.count()) {
             onAdFailToLoaded?.invoke(AdmErrorType.AD_ID_IS_NOT_EXIST, null)
             return
         }
@@ -133,7 +150,7 @@ class AdmNativeAd(
             onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_EXISTED, null)
             return
         }
-        if (!NetworkUtil.isNetworkAvailable(context)) {
+        if (!NetworkUtil.isNetworkAvailable(currentActivity)) {
             onAdFailToLoaded?.invoke(AdmErrorType.NETWORK_IS_NOT_AVAILABLE, null)
             return
         }
@@ -148,7 +165,7 @@ class AdmNativeAd(
             return
         }
 
-        if (!googleMobileAdsConsentManager.canRequestAds){
+        if (!googleMobileAdsConsentManager.canRequestAds) {
             onAdFailToLoaded?.invoke(AdmErrorType.UMP_IS_NOT_ACTIVE, null)
             return
         }
@@ -159,14 +176,18 @@ class AdmNativeAd(
         }
 
         isLoadingAd = true
-
+        Log.d(TAG, "id: $id")
         val adUnitId = AdmConfigAdId.getNativeAdUnitID(id)
-        val builder = AdLoader.Builder(context, adUnitId)
+        val builder = AdLoader.Builder(currentActivity, adUnitId)
 
         builder.forNativeAd { nativeAd ->
             // You must call destroy on old ads when you are done with them,
             // otherwise you will have a memory leak.
-            if(isDestroyed) nativeAd.destroy()
+            if (isDestroyed) {
+                Log.d(TAG, "Native Ad destroy : $nameActivity")
+                nativeAd.destroy()
+                return@forNativeAd
+            }
             this.nativeAd = nativeAd
             populateNativeAdView(adContainerView, layoutNativeAdView)
         }
@@ -204,7 +225,7 @@ class AdmNativeAd(
         // The headline and media content are guaranteed to be in every UnifiedNativeAd.
         nativeAdView.headlineView?.let {
             (it as TextView).background =
-                ContextCompat.getDrawable(context, R.drawable.round_corner)
+                ContextCompat.getDrawable(currentActivity, R.drawable.round_corner)
             it.text = ""
         }
 
@@ -212,40 +233,40 @@ class AdmNativeAd(
         // check before trying to display them.
         nativeAdView.bodyView?.let {
             (it as TextView).background =
-                ContextCompat.getDrawable(context, R.drawable.round_corner)
+                ContextCompat.getDrawable(currentActivity, R.drawable.round_corner)
             it.text = ""
         }
 
         nativeAdView.callToActionView?.let {
-            (it as Button).background = ContextCompat.getDrawable(context, R.drawable.round_corner)
+            (it as Button).background = ContextCompat.getDrawable(currentActivity, R.drawable.round_corner)
             it.text = ""
         }
 
         nativeAdView.iconView?.let {
             (it as ImageView).background =
-                ContextCompat.getDrawable(context, R.drawable.round_corner)
+                ContextCompat.getDrawable(currentActivity, R.drawable.round_corner)
         }
 
         nativeAdView.priceView?.let {
             (it as TextView).background =
-                ContextCompat.getDrawable(context, R.drawable.round_corner)
+                ContextCompat.getDrawable(currentActivity, R.drawable.round_corner)
             it.text = ""
         }
 
         nativeAdView.storeView?.let {
             (it as TextView).background =
-                ContextCompat.getDrawable(context, R.drawable.round_corner)
+                ContextCompat.getDrawable(currentActivity, R.drawable.round_corner)
             it.text = ""
         }
 
         nativeAdView.starRatingView?.let {
             (it as RatingBar).background =
-                ContextCompat.getDrawable(context, R.drawable.round_corner)
+                ContextCompat.getDrawable(currentActivity, R.drawable.round_corner)
         }
 
         nativeAdView.advertiserView?.let {
             (it as TextView).background =
-                ContextCompat.getDrawable(context, R.drawable.round_corner)
+                ContextCompat.getDrawable(currentActivity, R.drawable.round_corner)
             it.text = ""
         }
     }
@@ -256,7 +277,8 @@ class AdmNativeAd(
             return
         }
 
-        val nativeAdView = LayoutInflater.from(context).inflate(layoutNativeAdView, null) as NativeAdView
+        val nativeAdView =
+            LayoutInflater.from(currentActivity).inflate(layoutNativeAdView, null) as NativeAdView
 
         adContainerView.removeAllViews()
         adContainerView.addView(nativeAdView)
@@ -384,7 +406,7 @@ class AdmNativeAd(
         }
     }
 
-    fun destroyNativeAd(){
+    fun destroyNativeAd() {
         isDestroyed = true
         nativeAd?.destroy()
         nativeAd = null
@@ -392,31 +414,31 @@ class AdmNativeAd(
 
     override fun onAdOpened() {
         super.onAdOpened()
-        Log.d(TAG, "native ads onAdOpened")
+        Log.d(TAG, "native ads onAdOpened: $nameActivity")
     }
 
     override fun onAdImpression() {
         super.onAdImpression()
-        Log.d(TAG, "native ads onAdShow")
+        Log.d(TAG, "native ads onAdShow: $nameActivity")
         onAdShow?.invoke()
     }
 
     override fun onAdClicked() {
         super.onAdClicked()
-        Log.d(TAG, "native ads onAdLoaded")
+        Log.d(TAG, "native ads onAdLoaded: $nameActivity")
         onAdClicked?.invoke()
     }
 
     override fun onAdLoaded() {
         super.onAdLoaded()
-        Log.d(TAG, "native ads onAdLoaded")
+        Log.d(TAG, "native ads onAdLoaded: $nameActivity")
         isLoadingAd = false
         onAdLoaded?.invoke()
     }
 
     override fun onAdFailedToLoad(p0: LoadAdError) {
         super.onAdFailedToLoad(p0)
-        Log.d(TAG, "native ads onAdFailedToLoad " + p0.message)
+        Log.d(TAG, "native ads onAdFailedToLoad: $nameActivity " + p0.message)
         isLoadingAd = false
         onAdFailToLoaded?.invoke(AdmErrorType.OTHER, p0.message)
     }

@@ -155,7 +155,7 @@ class SplashActivity : AppCompatActivity() {
             adPosition.forEachIndexed { index, it ->
                 val admNativeAd = AdmNativeAd(
                     it.id,
-                    applicationContext,
+                    this,
                     it.isFullScreen
                 )
 
