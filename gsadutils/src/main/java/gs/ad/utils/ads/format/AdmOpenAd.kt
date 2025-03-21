@@ -42,6 +42,7 @@ class AdmOpenAd(
 
     private var loadTime: Long = 0
     private var isLoadingAd = false
+    private var isShowingAd = false
 
     fun setNewId(newValue: Int) {
         id = newValue
@@ -127,6 +128,7 @@ class AdmOpenAd(
     }
 
     private fun closeAds() {
+        isShowingAd = false
         onAdClosed?.invoke()
     }
 
@@ -180,6 +182,12 @@ class AdmOpenAd(
             return
         }
 
+        if (isShowingAd) {
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_SHOWING, null)
+            return
+        }
+        isShowingAd = true
+
         val act = currentActivity ?: return
         if (isAdAvailable()) {
             act.runOnUiThread {
@@ -187,6 +195,7 @@ class AdmOpenAd(
             }
         } else {
             Log.d(TAG, "The open ad wasn't ready yet.")
+            closeAds()
             loadAds()
         }
     }

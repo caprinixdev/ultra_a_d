@@ -41,6 +41,7 @@ class AdmInterstitialAd(
     var onAdClicked: (() -> Unit)? = null
     var onAdShow: (() -> Unit)? = null
     private var isLoadingAd = false
+    private var isShowingAd = false
 
     private var timer : Timer? = Timer()
     private var timerTask : TimerTask? = null
@@ -129,6 +130,7 @@ class AdmInterstitialAd(
 
     private fun resetTimer(){
         GlobalVariables.isShowPopup = false
+        isShowingAd = false
         isCountAd = false
         isShowPopup = false
         timerTask?.cancel()
@@ -175,8 +177,13 @@ class AdmInterstitialAd(
             return
         }
 
+        if (isShowingAd) {
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_SHOWING, null)
+            return
+        }
+        isShowingAd = true
+
         if (canShowAds()) {
-            resetTimer()
             currentActivity.runOnUiThread {
                 delEventDialogLoadAds()
                 mInterstitialAd?.show(currentActivity)
@@ -203,7 +210,10 @@ class AdmInterstitialAd(
             return
         }
 
-        if (isCountAd) return
+        if (isCountAd) {
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_LOADING, null)
+            return
+        }
         isCountAd = true
 
         var countAds = PreferencesManager.getInstance().getCounterAds(keyCounterAd)
@@ -233,7 +243,10 @@ class AdmInterstitialAd(
             return
         }
 
-        if (isShowPopup) { return }
+        if (isShowPopup) {
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_LOADING, null)
+            return
+        }
         isShowPopup = true
 
         onLoadingAd?.invoke()
@@ -256,8 +269,9 @@ class AdmInterstitialAd(
     }
 
     private fun delEventDialogLoadAds() {
-        if (dialogLoadAds != null && dialogLoadAds?.isShowing == true) {
-            dialogLoadAds?.dismiss()
+        val dl= dialogLoadAds ?: return
+        if (dl.isShowing) {
+            dl.dismiss()
             dialogLoadAds = null
         }
     }

@@ -53,6 +53,7 @@ class AdmRewardAd(
     private var isShowPopup: Boolean = false
     private var isCountAd: Boolean = false
     private var isLoadingAd = false
+    private var isShowingAd = false
 
     fun setNewId(newValue: Int) {
         id = newValue
@@ -133,6 +134,7 @@ class AdmRewardAd(
 
     private fun resetTimer() {
         GlobalVariables.isShowPopup = false
+        isShowingAd = false
         isCountAd = false
         isShowPopup = false
         timerTask?.cancel()
@@ -180,8 +182,14 @@ class AdmRewardAd(
             closeAds()
             return
         }
+
+        if (isShowingAd) {
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_SHOWING, null)
+            return
+        }
+        isShowingAd = true
+
         if (canShowAds()) {
-            resetTimer()
             currentActivity.runOnUiThread {
                 delEventDialogLoadAds()
                 mRewardedAd?.show(currentActivity) { isReward = true }
@@ -206,7 +214,10 @@ class AdmRewardAd(
             return
         }
 
-        if (isCountAd) return
+        if (isCountAd) {
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_LOADING, null)
+            return
+        }
         isCountAd = true
 
         var countAds = PreferencesManager.getInstance().getCounterAds(keyCounterAd)
@@ -236,6 +247,7 @@ class AdmRewardAd(
             return
         }
         if (isShowPopup) {
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_LOADING, null)
             return
         }
         isShowPopup = true
@@ -261,8 +273,9 @@ class AdmRewardAd(
     }
 
     private fun delEventDialogLoadAds() {
-        if (dialogLoadAds != null && dialogLoadAds?.isShowing == true) {
-            dialogLoadAds?.dismiss()
+        val dl= dialogLoadAds ?: return
+        if (dl.isShowing) {
+            dl.dismiss()
             dialogLoadAds = null
         }
     }
