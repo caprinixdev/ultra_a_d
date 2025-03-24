@@ -39,6 +39,7 @@ class AdmOpenAd(
 
     private var loadTime: Long = 0
     private var isLoadingAd = false
+    private var isShowedAd = false
 
     fun setNewId(newValue: Int) {
         id = newValue
@@ -107,6 +108,7 @@ class AdmOpenAd(
                     }
 
                     if (isShowAd){
+                        isShowedAd = true
                         ad.show(act)
                     }
 
@@ -182,14 +184,44 @@ class AdmOpenAd(
         }
 
         val act = currentActivity ?: return
-        if (isAdAvailable()) {
-            act.runOnUiThread {
-                mOpenAd?.show(act)
+        if (canShowAd()) {
+            if (hasUsing4Hours){
+                if (wasLoadTimeLessThanNHoursAgo(4)){
+                    if (isShowedAd){
+                        Log.d(TAG, "The open ad take another 4 hours to load")
+                        onAdFailToLoaded?.invoke(AdmErrorType.LOAD_TIME_LESS_THEN_N_HOURS_AGO, null)
+                    }else{
+                        isShowedAd = true
+                        act.runOnUiThread {
+                            mOpenAd?.show(act)
+                        }
+                    }
+                }else{
+                    if(canShowAd() && !isShowedAd){
+                        act.runOnUiThread {
+                            mOpenAd?.show(act)
+                        }
+                    }else{
+                        isShowedAd = false
+                        closeAds()
+                        loadAds()
+                    }
+
+                    if(isLoadingAd) { return }
+                    mOpenAd = null
+                }
+            }else{
+                act.runOnUiThread {
+                    mOpenAd?.show(act)
+                }
             }
         } else {
             Log.d(TAG, "The open ad wasn't ready yet.")
             closeAds()
             loadAds()
+
+            if(isLoadingAd) { return }
+            mOpenAd = null
         }
     }
 
@@ -203,12 +235,8 @@ class AdmOpenAd(
         return (dateDifference < (numMilliSecondsPerHour * numHours))
     }
 
-    private fun isAdAvailable(): Boolean {
-        return if (!hasUsing4Hours) {
-            mOpenAd != null
-        } else {
-            mOpenAd != null && wasLoadTimeLessThanNHoursAgo(4)
-        }
+    private fun canShowAd(): Boolean {
+        return mOpenAd != null
     }
 
     companion object {

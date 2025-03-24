@@ -2,7 +2,7 @@ package gs.ad.utils.ads.error;
 
 public enum AdmErrorType {
     LIST_AD_ID_IS_EMPTY,
-    AD_IS_SHOWING,
+    LOAD_TIME_LESS_THEN_N_HOURS_AGO,
     AD_IS_LOADING,
     AD_ID_IS_NOT_EXIST,
     NETWORK_IS_NOT_AVAILABLE,
