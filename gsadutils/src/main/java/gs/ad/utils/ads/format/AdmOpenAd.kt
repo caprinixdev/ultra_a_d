@@ -1,7 +1,6 @@
 package gs.ad.utils.ads.format
 
 import android.app.Activity
-import android.app.Dialog
 import android.content.Context
 import android.util.Log
 import com.google.android.gms.ads.AdError
@@ -10,7 +9,6 @@ import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.appopen.AppOpenAd
 import com.google.android.gms.ads.appopen.AppOpenAd.AppOpenAdLoadCallback
-import com.google.android.gms.ads.interstitial.InterstitialAd
 import gs.ad.utils.ads.AdmConfigAdId
 import gs.ad.utils.ads.GoogleMobileAdsConsentManager
 import gs.ad.utils.ads.error.AdmErrorType
@@ -18,7 +16,6 @@ import gs.ad.utils.utils.GlobalVariables
 import gs.ad.utils.utils.NetworkUtil
 import gs.ad.utils.utils.PreferencesManager
 import java.util.Date
-import java.util.Timer
 
 class AdmOpenAd(
     private var id: Int,
@@ -51,7 +48,7 @@ class AdmOpenAd(
         currentActivity = newValue
     }
 
-    private fun loadAds() {
+    fun loadAds(isShowAd: Boolean = false) {
         if (AdmConfigAdId.listOpenAdUnitID.isEmpty()){
             onAdFailToLoaded?.invoke(AdmErrorType.LIST_AD_ID_IS_EMPTY, null)
             return
@@ -107,6 +104,10 @@ class AdmOpenAd(
                     mOpenAd?.fullScreenContentCallback = this@AdmOpenAd
                     if (hasUsing4Hours) {
                         loadTime = Date().time
+                    }
+
+                    if (isShowAd){
+                        ad.show(act)
                     }
 
                     onAdLoaded?.invoke()
