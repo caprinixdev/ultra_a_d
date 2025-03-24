@@ -55,6 +55,8 @@ dependencies {
     implementation ("com.github.eriffanani:ContentLoader:1.2.0")
     implementation ("com.android.billingclient:billing:7.1.1")
     implementation ("com.google.guava:guava:32.0.1-jre")
+
+    implementation("com.facebook.shimmer:shimmer:0.5.0@aar")
 }
 
 publishing{

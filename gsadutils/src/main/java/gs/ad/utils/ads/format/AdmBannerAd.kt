@@ -3,6 +3,7 @@ package gs.ad.utils.ads.format
 import android.app.Activity
 import android.os.Build
 import android.util.Log
+import android.view.LayoutInflater
 import android.view.View
 import android.view.WindowMetrics
 import androidx.constraintlayout.widget.ConstraintLayout
@@ -11,6 +12,7 @@ import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
 import com.google.android.gms.ads.LoadAdError
+import gs.ad.utils.R
 import gs.ad.utils.ads.AdmConfigAdId
 import gs.ad.utils.ads.GoogleMobileAdsConsentManager
 import gs.ad.utils.ads.error.AdmErrorType
@@ -119,9 +121,14 @@ class AdmBannerAd(
 //        textView.text = act.resources.getString(R.string.loading_ads)
 //        textView.gravity = Gravity.CENTER
 
+        // Create a new ad loader.
+        // Update banner
+        val contentLoader = LayoutInflater.from(currentActivity)
+            .inflate(R.layout.loading_banner, adContainerView, false)
+
         // Replace ad container with new ad view.
         adContainerView.removeAllViews()
-        adContainerView.addView(adView)
+        adContainerView.addView(contentLoader)
 //        adContainerView.parent?.let {
 //            (it as ViewGroup).addView(textView)
 //        }
@@ -154,6 +161,9 @@ class AdmBannerAd(
 
     fun destroyBanner(){
         adView?.destroy()
+        // Update banner
+        adContainerView?.visibility = View.GONE
+
         adView = null
     }
 
@@ -172,6 +182,10 @@ class AdmBannerAd(
         super.onAdLoaded()
         Log.d(TAG, "bannerView onAdLoaded")
         isLoadingAd = false
+        // Update banner
+        adContainerView?.removeAllViews()
+        adContainerView?.addView(adView)
+
         adContainerView?.visibility = View.VISIBLE
         adView?.visibility = View.VISIBLE
         onAdLoaded?.invoke()
@@ -187,6 +201,10 @@ class AdmBannerAd(
         super.onAdFailedToLoad(loadAdError)
         Log.d(TAG, "bannerView " + loadAdError.message)
         isLoadingAd = false
+        // Update banner
+        adContainerView?.removeAllViews()
+        adContainerView?.visibility = View.GONE
+
         onAdFailToLoaded?.invoke(AdmErrorType.OTHER, loadAdError.message)
     }
 
