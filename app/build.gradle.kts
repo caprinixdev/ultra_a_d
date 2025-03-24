@@ -58,7 +58,7 @@ dependencies {
     implementation ("com.github.eriffanani:ContentLoader:1.2.0")
     implementation ("com.facebook.shimmer:shimmer:0.5.0@aar")
     implementation ("androidx.lifecycle:lifecycle-process:2.8.7")
-//    implementation ("com.github.caprinixdev:ultra_a_d:1.0.7")
+//    implementation ("com.github.caprinixdev:ultra_a_d:1.0.8")
 
     implementation (project(":gsadutils"))
 }
