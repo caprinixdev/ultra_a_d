@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/banner_loading"
     android:layout_width="match_parent"
-    android:layout_height="0dp"
+    android:layout_height="200dp"
     android:paddingHorizontal="16dp"
     android:paddingVertical="8dp"
     app:layout_constraintHeight_default="wrap">
@@ -28,7 +28,7 @@
             <View
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:background="@android:color/darker_gray" />
+                android:background="@color/purple_700" />
 
         </com.facebook.shimmer.ShimmerFrameLayout>
 
@@ -85,7 +85,7 @@
             <View
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:background="@android:color/darker_gray" />
+                android:background="@color/purple_700" />
 
         </com.facebook.shimmer.ShimmerFrameLayout>
 

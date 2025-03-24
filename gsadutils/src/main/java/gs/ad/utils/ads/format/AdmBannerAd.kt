@@ -43,9 +43,10 @@ class AdmBannerAd(
         id = newValue
     }
 
-    fun setNewActivity(newValue: Activity){
+    fun setNewActivity(newValue: Activity) {
         currentActivity = newValue
     }
+
     // [START get_ad_size]
     // Get the ad size with screen width.
     private val adSize: AdSize
@@ -64,13 +65,13 @@ class AdmBannerAd(
             return AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(act, adWidth)
         }
 
-    fun loadAd(adContainerView: ConstraintLayout) {
-        if (AdmConfigAdId.listBannerAdUnitID.isEmpty()){
+    fun loadAd(adContainerView: ConstraintLayout, loadingLayout: Int? = null) {
+        if (AdmConfigAdId.listBannerAdUnitID.isEmpty()) {
             onAdFailToLoaded?.invoke(AdmErrorType.LIST_AD_ID_IS_EMPTY, null)
             return
         }
 
-        if (id >= AdmConfigAdId.listBannerAdUnitID.count()){
+        if (id >= AdmConfigAdId.listBannerAdUnitID.count()) {
             onAdFailToLoaded?.invoke(AdmErrorType.AD_ID_IS_NOT_EXIST, null)
             return
         }
@@ -95,7 +96,7 @@ class AdmBannerAd(
             return
         }
 
-        if (!googleMobileAdsConsentManager.canRequestAds){
+        if (!googleMobileAdsConsentManager.canRequestAds) {
             onAdFailToLoaded?.invoke(AdmErrorType.UMP_IS_NOT_ACTIVE, null)
             return
         }
@@ -123,9 +124,19 @@ class AdmBannerAd(
 
         // Create a new ad loader.
         // Update banner
-        val contentLoader = LayoutInflater.from(currentActivity)
-            .inflate(R.layout.loading_banner, adContainerView, false)
+        val contentLoader = if (loadingLayout == null) {
+            LayoutInflater.from(currentActivity)
+                .inflate(R.layout.loading_banner, adContainerView, false)
+        } else {
+            LayoutInflater.from(currentActivity)
+                .inflate(loadingLayout, adContainerView, false)
+        }
 
+        val layoutParams = ConstraintLayout.LayoutParams(
+            ConstraintLayout.LayoutParams.MATCH_PARENT,
+            size.getHeightInPixels(currentActivity)
+        )
+        contentLoader.layoutParams = layoutParams
         // Replace ad container with new ad view.
         adContainerView.removeAllViews()
         adContainerView.addView(contentLoader)
@@ -151,15 +162,15 @@ class AdmBannerAd(
         this.adView = adView
     }
 
-    fun resumeBanner(){
+    fun resumeBanner() {
         adView?.resume()
     }
 
-    fun pauseBanner(){
+    fun pauseBanner() {
         adView?.pause()
     }
 
-    fun destroyBanner(){
+    fun destroyBanner() {
         adView?.destroy()
         // Update banner
         adContainerView?.visibility = View.GONE

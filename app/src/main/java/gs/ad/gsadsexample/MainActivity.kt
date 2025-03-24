@@ -204,7 +204,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadBannerAd() {
-        bannerAd?.loadAd(binding.bannerView)
+        bannerAd?.loadAd(binding.bannerView, R.layout.loading_banner)
     }
 
     private fun startShimmerLoading() {
