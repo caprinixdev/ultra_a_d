@@ -189,6 +189,13 @@ class AdmRewardAd(
             }
         } else {
             Log.d("TAG", "The reward ad wasn't ready yet.")
+
+            if (!NetworkUtil.isNetworkAvailable(currentActivity.applicationContext)) {
+                currentActivity.runOnUiThread {
+                    delEventDialogLoadAds()
+                }
+            }
+
             //adsManager.activity.closeAds(TYPE_ADS.RewardAd);
             //loadAds();
         }

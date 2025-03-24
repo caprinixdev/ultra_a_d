@@ -183,6 +183,13 @@ class AdmInterstitialAd(
             }
         } else {
             Log.d(TAG, "The interstitial ad wasn't ready yet.")
+
+            if (!NetworkUtil.isNetworkAvailable(currentActivity.applicationContext)) {
+                currentActivity.runOnUiThread {
+                    delEventDialogLoadAds()
+                }
+            }
+
             //adsManager.activity.closeAds(TYPE_ADS.InterstitialAd);
             //loadAds();
         }
