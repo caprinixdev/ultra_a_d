@@ -192,8 +192,8 @@ class AdmRewardAd(
         }
 
         if (canShowAds()) {
-            resetTimer()
             currentActivity.runOnUiThread {
+                resetTimer()
                 delEventDialogLoadAds()
                 mRewardedAd?.show(currentActivity) { isReward = true }
             }
@@ -201,7 +201,8 @@ class AdmRewardAd(
             Log.d("TAG", "The reward ad wasn't ready yet.")
 
             if (!NetworkUtil.isNetworkAvailable(currentActivity.applicationContext)) {
-                delEventDialogLoadAds()
+                onAdFailToLoaded?.invoke(AdmErrorType.NETWORK_IS_NOT_AVAILABLE, null, tag)
+                closeAds()
             }
 
             //adsManager.activity.closeAds(TYPE_ADS.RewardAd);

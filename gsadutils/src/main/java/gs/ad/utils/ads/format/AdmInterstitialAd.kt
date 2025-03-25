@@ -187,8 +187,8 @@ class AdmInterstitialAd(
         }
 
         if (canShowAds()) {
-            resetTimer()
             currentActivity.runOnUiThread {
+                resetTimer()
                 delEventDialogLoadAds()
                 mInterstitialAd?.show(currentActivity)
             }
@@ -196,7 +196,8 @@ class AdmInterstitialAd(
             Log.d(TAG, "The interstitial ad wasn't ready yet.")
 
             if (!NetworkUtil.isNetworkAvailable(currentActivity.applicationContext)) {
-                delEventDialogLoadAds()
+                onAdFailToLoaded?.invoke(AdmErrorType.NETWORK_IS_NOT_AVAILABLE, null, tag)
+                closeAds()
             }
 
             //adsManager.activity.closeAds(TYPE_ADS.InterstitialAd);
