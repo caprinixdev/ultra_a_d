@@ -22,6 +22,7 @@ import gs.ad.utils.utils.PreferencesManager
 class AdmBannerAd(
     private var id: Int,
     private var currentActivity: Activity,
+    private var listAdCircularArray: List<String>? = null,
     private val customSize: AdSize? = null
 ) : AdListener() {
     var tag = 0
@@ -32,12 +33,13 @@ class AdmBannerAd(
     var adContainerView: ConstraintLayout? = null
     var adView: AdView? = null
 
-    var onAdFailToLoaded: ((AdmErrorType, String?) -> Unit?)? = null
-    var onAdLoaded: (() -> Unit)? = null
-    var onAdClosed: (() -> Unit)? = null
-    var onAdClicked: (() -> Unit)? = null
-    var onAdShow: (() -> Unit)? = null
+    var onAdFailToLoaded: ((AdmErrorType, String?, Int) -> Unit?)? = null
+    var onAdLoaded: ((Int) -> Unit)? = null
+    var onAdClosed: ((Int) -> Unit)? = null
+    var onAdClicked: ((Int) -> Unit)? = null
+    var onAdShow: ((Int) -> Unit)? = null
     private var isLoadingAd = false
+    private var countTier: Int = 0
 
     fun setNewId(newValue: Int) {
         id = newValue
@@ -67,48 +69,51 @@ class AdmBannerAd(
 
     fun loadAd(adContainerView: ConstraintLayout, loadingLayout: Int? = null) {
         if (AdmConfigAdId.listBannerAdUnitID.isEmpty()) {
-            onAdFailToLoaded?.invoke(AdmErrorType.LIST_AD_ID_IS_EMPTY, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.LIST_AD_ID_IS_EMPTY, null, tag)
             return
         }
 
         if (id >= AdmConfigAdId.listBannerAdUnitID.count()) {
-            onAdFailToLoaded?.invoke(AdmErrorType.AD_ID_IS_NOT_EXIST, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_ID_IS_NOT_EXIST, null, tag)
             return
         }
 
         if (adView != null) {
-            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_EXISTED, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_EXISTED, null, tag)
             return
         }
 
         if (!NetworkUtil.isNetworkAvailable(currentActivity.applicationContext)) {
-            onAdFailToLoaded?.invoke(AdmErrorType.NETWORK_IS_NOT_AVAILABLE, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.NETWORK_IS_NOT_AVAILABLE, null, tag)
             return
         }
 
         if (PreferencesManager.getInstance().isSUB()) {
-            onAdFailToLoaded?.invoke(AdmErrorType.CLIENT_HAVE_SUB, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.CLIENT_HAVE_SUB, null, tag)
             return
         }
 
         if (PreferencesManager.getInstance().isRemoveAds()) {
-            onAdFailToLoaded?.invoke(AdmErrorType.CLIENT_HAVE_BEEN_REMOVED_AD, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.CLIENT_HAVE_BEEN_REMOVED_AD, null, tag)
             return
         }
 
         if (!googleMobileAdsConsentManager.canRequestAds) {
-            onAdFailToLoaded?.invoke(AdmErrorType.UMP_IS_NOT_ACTIVE, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.UMP_IS_NOT_ACTIVE, null, tag)
             return
         }
 
         if (isLoadingAd) {
-            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_LOADING, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_LOADING, null, tag)
             return
         }
         isLoadingAd = true
 
-
-        val adUnitId = AdmConfigAdId.getBannerAdUnitID(id)
+        var adUnitId = AdmConfigAdId.getBannerAdUnitID(id)
+        listAdCircularArray?.let {
+            adUnitId = it[countTier]
+            countTier = ++countTier % it.count()
+        }
         // Create a new ad view.
         val adView = AdView(currentActivity)
         val size = customSize ?: adSize
@@ -186,7 +191,7 @@ class AdmBannerAd(
     override fun onAdImpression() {
         super.onAdImpression()
         Log.d(TAG, "bannerView onAdShow")
-        onAdShow?.invoke()
+        onAdShow?.invoke(tag)
     }
 
     override fun onAdLoaded() {
@@ -199,13 +204,13 @@ class AdmBannerAd(
 
         adContainerView?.visibility = View.VISIBLE
         adView?.visibility = View.VISIBLE
-        onAdLoaded?.invoke()
+        onAdLoaded?.invoke(tag)
     }
 
     override fun onAdClicked() {
         // Called when a click is recorded for an ad.
         Log.d(TAG, "bannerView onAdClicked")
-        onAdClicked?.invoke()
+        onAdClicked?.invoke(tag)
     }
 
     override fun onAdFailedToLoad(loadAdError: LoadAdError) {
@@ -216,7 +221,7 @@ class AdmBannerAd(
         adContainerView?.removeAllViews()
         adContainerView?.visibility = View.GONE
 
-        onAdFailToLoaded?.invoke(AdmErrorType.OTHER, loadAdError.message)
+        onAdFailToLoaded?.invoke(AdmErrorType.OTHER, loadAdError.message, tag)
     }
 
     companion object {

@@ -13,7 +13,7 @@ Như hình:
 #### dependencies
 Cài thư viện
 ```gradle
-implementation("com.github.caprinixdev:ultra_a_d:1.0.10")
+implementation("com.github.caprinixdev:ultra_a_d:1.0.11")
 ```
 Thêm các thư viện
 ```gradle

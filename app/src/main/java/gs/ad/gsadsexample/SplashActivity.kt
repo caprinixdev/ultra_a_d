@@ -167,7 +167,7 @@ class SplashActivity : AppCompatActivity() {
                     countLoadAd += 1
                 }
 
-                admNativeAd.onAdFailToLoaded = { admErrorType, errorMessage ->
+                admNativeAd.onAdFailToLoaded = { admErrorType, errorMessage, tag ->
                     runOnUiThread {
                         countLoadAd += 1
                     }

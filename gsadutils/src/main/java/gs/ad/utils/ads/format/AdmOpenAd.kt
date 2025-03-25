@@ -20,26 +20,27 @@ import java.util.Date
 class AdmOpenAd(
     private var id: Int,
     private val context: Context,
+    private var listAdCircularArray: List<String>? = null,
     private var currentActivity: Activity? = null
 ) : FullScreenContentCallback() {
     var tag = 0
-
 
     private val googleMobileAdsConsentManager: GoogleMobileAdsConsentManager =
         GoogleMobileAdsConsentManager.getInstance(context)
     private var mOpenAd: AppOpenAd? = null
 
-    var onAdFailToLoaded: ((AdmErrorType, String?) -> Unit?)? = null
-    var onAdLoaded: (() -> Unit)? = null
-    var onAdClosed: (() -> Unit)? = null
-    var onAdClicked: (() -> Unit)? = null
-    var onAdShow: (() -> Unit)? = null
+    var onAdFailToLoaded: ((AdmErrorType, String?, Int) -> Unit?)? = null
+    var onAdLoaded: ((Int) -> Unit)? = null
+    var onAdClosed: ((Int) -> Unit)? = null
+    var onAdClicked: ((Int) -> Unit)? = null
+    var onAdShow: ((Int) -> Unit)? = null
 
     val hasUsing4Hours: Boolean get() = GlobalVariables.hasUsing4Hours
 
     private var loadTime: Long = 0
     private var isLoadingAd = false
     private var isShowedAd = false
+    private var countTier: Int = 0
 
     fun setNewId(newValue: Int) {
         id = newValue
@@ -51,46 +52,50 @@ class AdmOpenAd(
 
     fun loadAds(isShowAd: Boolean = false) {
         if (AdmConfigAdId.listOpenAdUnitID.isEmpty()){
-            onAdFailToLoaded?.invoke(AdmErrorType.LIST_AD_ID_IS_EMPTY, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.LIST_AD_ID_IS_EMPTY, null, tag)
             return
         }
 
         if (id >= AdmConfigAdId.listOpenAdUnitID.count()){
-            onAdFailToLoaded?.invoke(AdmErrorType.AD_ID_IS_NOT_EXIST, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_ID_IS_NOT_EXIST, null, tag)
             return
         }
 
         if (mOpenAd != null) {
-            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_EXISTED, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_EXISTED, null, tag)
             return
         }
         if (!NetworkUtil.isNetworkAvailable(context)) {
-            onAdFailToLoaded?.invoke(AdmErrorType.NETWORK_IS_NOT_AVAILABLE, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.NETWORK_IS_NOT_AVAILABLE, null, tag)
             return
         }
 
         if (PreferencesManager.getInstance().isSUB()) {
-            onAdFailToLoaded?.invoke(AdmErrorType.CLIENT_HAVE_SUB, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.CLIENT_HAVE_SUB, null, tag)
             return
         }
 
         if (PreferencesManager.getInstance().isRemoveAds()) {
-            onAdFailToLoaded?.invoke(AdmErrorType.CLIENT_HAVE_BEEN_REMOVED_AD, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.CLIENT_HAVE_BEEN_REMOVED_AD, null, tag)
             return
         }
 
         if (currentActivity == null){
-            onAdFailToLoaded?.invoke(AdmErrorType.ACTIVITY_IS_NOT_AVAILABLE, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.ACTIVITY_IS_NOT_AVAILABLE, null, tag)
             return
         }
 
         if (isLoadingAd) {
-            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_LOADING, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_LOADING, null, tag)
             return
         }
         isLoadingAd = true
 
-        val adUnitId = AdmConfigAdId.getOpenAdUnitID(id)
+        var adUnitId = AdmConfigAdId.getOpenAdUnitID(id)
+        listAdCircularArray?.let {
+            adUnitId = it[countTier]
+            countTier = ++countTier % it.count()
+        }
         val act = currentActivity ?: return
 
         val adRequest = AdRequest.Builder().build()
@@ -112,7 +117,7 @@ class AdmOpenAd(
                         ad.show(act)
                     }
 
-                    onAdLoaded?.invoke()
+                    onAdLoaded?.invoke(tag)
                 }
 
                 override fun onAdFailedToLoad(loadAdError: LoadAdError) {
@@ -122,7 +127,8 @@ class AdmOpenAd(
                     resetAd()
                     onAdFailToLoaded?.invoke(
                         AdmErrorType.OTHER,
-                        loadAdError.message
+                        loadAdError.message,
+                        tag
                     )
                     closeAds()
                 }
@@ -130,13 +136,13 @@ class AdmOpenAd(
     }
 
     private fun closeAds() {
-        onAdClosed?.invoke()
+        onAdClosed?.invoke(tag)
     }
 
     override fun onAdClicked() {
         // Called when a click is recorded for an ad.
         Log.d(TAG, "Ad was clicked.")
-        onAdClicked?.invoke()
+        onAdClicked?.invoke(tag)
     }
 
     override fun onAdDismissedFullScreenContent() {
@@ -161,19 +167,16 @@ class AdmOpenAd(
         resetAd()
         onAdFailToLoaded?.invoke(
             AdmErrorType.OTHER,
-            adError.message
+            adError.message,
+            tag
         )
-    }
-
-    override fun onAdImpression() {
-        // Called when an impression is recorded for an ad.
-        Log.d(TAG, "Ad recorded an impression.")
+        closeAds()
     }
 
     override fun onAdShowedFullScreenContent() {
         // Called when ad is shown.
         Log.d(TAG, "Ad showed fullscreen content.")
-        onAdShow?.invoke()
+        onAdShow?.invoke(tag)
     }
 
     fun showAds() {
@@ -189,7 +192,7 @@ class AdmOpenAd(
                 if (wasLoadTimeLessThanNHoursAgo(4)){
                     if (isShowedAd){
                         Log.d(TAG, "The open ad take another 4 hours to load")
-                        onAdFailToLoaded?.invoke(AdmErrorType.LOAD_TIME_LESS_THEN_N_HOURS_AGO, null)
+                        onAdFailToLoaded?.invoke(AdmErrorType.LOAD_TIME_LESS_THEN_N_HOURS_AGO, null, tag)
                     }else{
                         isShowedAd = true
                         act.runOnUiThread {

@@ -61,7 +61,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun setUpAd() {
         bannerAd = AdmBannerAd(0, this)
-        bannerAd?.onAdFailToLoaded = { admErrorType, errorMessage ->
+        bannerAd?.onAdFailToLoaded = { admErrorType, errorMessage, tag ->
             runOnUiThread {
                 Log.d(TAG, "xxxyyy " + admErrorType.name + "," + errorMessage)
             }
@@ -73,7 +73,7 @@ class MainActivity : AppCompatActivity() {
                 startActivity(Intent(this@MainActivity, MainActivity2::class.java))
             }
         }
-        interShowActivity2?.onAdFailToLoaded = { admErrorType, errorMessage ->
+        interShowActivity2?.onAdFailToLoaded = { admErrorType, errorMessage, tag ->
             runOnUiThread {
                 Log.d(TAG, "xxxyyy " + admErrorType.name + "," + errorMessage)
             }
@@ -86,14 +86,14 @@ class MainActivity : AppCompatActivity() {
                 "Count Ads onAdClosed : "
             )
         }
-        interCountAd?.onAdFailToLoaded = { admErrorType, errorMessage ->
+        interCountAd?.onAdFailToLoaded = { admErrorType, errorMessage, tag->
             runOnUiThread {
                 Log.d(TAG, "xxxyyy " + admErrorType.name + "," + errorMessage)
             }
         }
 
         nativeAd = AdmNativeAd(1, this, false)
-        nativeAd?.onAdFailToLoaded = { admErrorType, errorMessage ->
+        nativeAd?.onAdFailToLoaded = { admErrorType, errorMessage, tag ->
             runOnUiThread {
                 Log.d(TAG, "xxxyyy " + admErrorType.name + "," + errorMessage)
                 stopShimmerLoading()
@@ -113,7 +113,7 @@ class MainActivity : AppCompatActivity() {
                 checkSubToUpdateUI()
             }
         }
-        rewardedAdRemoveAd?.onAdFailToLoaded = { admErrorType, errorMessage ->
+        rewardedAdRemoveAd?.onAdFailToLoaded = { admErrorType, errorMessage, tag ->
             runOnUiThread {
                 Log.d(TAG, "xxxyyy " + admErrorType.name + "," + errorMessage)
             }

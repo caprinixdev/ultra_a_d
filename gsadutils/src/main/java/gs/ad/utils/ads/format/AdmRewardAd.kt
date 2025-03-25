@@ -24,7 +24,8 @@ import java.util.TimerTask
 
 class AdmRewardAd(
     private var id: Int,
-    private var currentActivity: Activity
+    private var currentActivity: Activity,
+    private var listAdCircularArray: List<String>? = null
 ) : FullScreenContentCallback() {
     var tag = 0
 
@@ -33,13 +34,13 @@ class AdmRewardAd(
     private var mRewardedAd: RewardedAd? = null
     private var dialogLoadAds: Dialog? = null
 
-    var onAdFailToLoaded: ((AdmErrorType, String?) -> Unit?)? = null
-    var onAdLoaded: (() -> Unit)? = null
-    var onAdClosed: (() -> Unit)? = null
-    var onAdClicked: (() -> Unit)? = null
-    var onAdShow: (() -> Unit)? = null
-    var onHaveReward: (() -> Unit)? = null
-    var onNotHaveReward: (() -> Unit)? = null
+    var onAdFailToLoaded: ((AdmErrorType, String?, Int) -> Unit?)? = null
+    var onAdLoaded: ((Int) -> Unit)? = null
+    var onAdClosed: ((Int) -> Unit)? = null
+    var onAdClicked: ((Int) -> Unit)? = null
+    var onAdShow: ((Int) -> Unit)? = null
+    var onHaveReward: ((Int) -> Unit)? = null
+    var onNotHaveReward: ((Int) -> Unit)? = null
 
     private var timer: Timer? = Timer()
     private var timerTask: TimerTask? = null
@@ -53,6 +54,7 @@ class AdmRewardAd(
     private var isShowPopup: Boolean = false
     private var isCountAd: Boolean = false
     private var isLoadingAd = false
+    private var countTier: Int = 0
 
     fun setNewId(newValue: Int) {
         id = newValue
@@ -66,41 +68,46 @@ class AdmRewardAd(
         isReward = false
 
         if (AdmConfigAdId.listRewardAdUnitID.isEmpty()) {
-            onAdFailToLoaded?.invoke(AdmErrorType.LIST_AD_ID_IS_EMPTY, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.LIST_AD_ID_IS_EMPTY, null, tag)
             return
         }
 
         if (id >= AdmConfigAdId.listRewardAdUnitID.count()) {
-            onAdFailToLoaded?.invoke(AdmErrorType.AD_ID_IS_NOT_EXIST, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_ID_IS_NOT_EXIST, null, tag)
             return
         }
 
         if (mRewardedAd != null) {
-            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_EXISTED, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_EXISTED, null, tag)
             return
         }
         if (!NetworkUtil.isNetworkAvailable(currentActivity.applicationContext)) {
-            onAdFailToLoaded?.invoke(AdmErrorType.NETWORK_IS_NOT_AVAILABLE, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.NETWORK_IS_NOT_AVAILABLE, null, tag)
             return
         }
 
 //        if (PreferencesManager.getInstance().isSUB()) {
-//            onAdFailToLoaded?.invoke(AdmErrorType.CLIENT_HAVE_SUB, null)
+//            onAdFailToLoaded?.invoke(AdmErrorType.CLIENT_HAVE_SUB, null, tag)
 //            return
 //        }
 
         if (PreferencesManager.getInstance().isRemoveAds()) {
-            onAdFailToLoaded?.invoke(AdmErrorType.CLIENT_HAVE_BEEN_REMOVED_AD, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.CLIENT_HAVE_BEEN_REMOVED_AD, null, tag)
             return
         }
 
         if (isLoadingAd) {
-            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_LOADING, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_LOADING, null, tag)
             return
         }
         isLoadingAd = true
 
-        val adUnitId = AdmConfigAdId.getRewardAdUnitID(id)
+        var adUnitId = AdmConfigAdId.getRewardAdUnitID(id)
+        listAdCircularArray?.let {
+            adUnitId = it[countTier]
+            countTier = ++countTier % it.count()
+        }
+
         val adRequest = AdRequest.Builder().build()
 
         RewardedAd.load(currentActivity, adUnitId, adRequest, object : RewardedAdLoadCallback() {
@@ -110,7 +117,8 @@ class AdmRewardAd(
                 isLoadingAd = false
                 onAdFailToLoaded?.invoke(
                     AdmErrorType.OTHER,
-                    loadAdError.message
+                    loadAdError.message,
+                    tag
                 )
                 mRewardedAd = null
                 closeAds()
@@ -120,16 +128,17 @@ class AdmRewardAd(
                 isLoadingAd = false
                 mRewardedAd = ad
                 mRewardedAd?.fullScreenContentCallback = this@AdmRewardAd
-                onAdLoaded?.invoke()
+                onAdLoaded?.invoke(tag)
                 Log.d(TAG, "Ad was loaded.")
             }
         })
     }
 
     private fun closeAds() {
+        delEventDialogLoadAds()
         resetTimer()
         GlobalVariables.isShowPopup = false
-        onAdClosed?.invoke()
+        onAdClosed?.invoke(tag)
     }
 
     private fun resetTimer() {
@@ -143,7 +152,7 @@ class AdmRewardAd(
     override fun onAdClicked() {
         // Called when a click is recorded for an ad.
         Log.d(TAG, "Ad was clicked.")
-        onAdClicked?.invoke()
+        onAdClicked?.invoke(tag)
     }
 
     override fun onAdDismissedFullScreenContent() {
@@ -151,9 +160,9 @@ class AdmRewardAd(
         // Set the ad reference to null so you don't show the ad a second time.
         Log.d(TAG, "Ad dismissed fullscreen content.")
         mRewardedAd = null
-        if (isReward) onHaveReward?.invoke()
-        else onNotHaveReward?.invoke()
-        onAdClosed?.invoke()
+        if (isReward) onHaveReward?.invoke(tag)
+        else onNotHaveReward?.invoke(tag)
+        closeAds()
 //        loadAds(currentID)
     }
 
@@ -161,7 +170,8 @@ class AdmRewardAd(
         // Called when ad fails to show.
         Log.e(TAG, "Ad failed to show fullscreen content.")
         mRewardedAd = null
-        onAdFailToLoaded?.invoke(AdmErrorType.OTHER, adError.message)
+        onAdFailToLoaded?.invoke(AdmErrorType.OTHER, adError.message, tag)
+        closeAds()
     }
 
     override fun onAdImpression() {
@@ -172,7 +182,7 @@ class AdmRewardAd(
     override fun onAdShowedFullScreenContent() {
         // Called when ad is shown.
         Log.d(TAG, "Ad showed fullscreen content.")
-        onAdShow?.invoke()
+        onAdShow?.invoke(tag)
     }
 
     private fun showAds() {
@@ -191,9 +201,7 @@ class AdmRewardAd(
             Log.d("TAG", "The reward ad wasn't ready yet.")
 
             if (!NetworkUtil.isNetworkAvailable(currentActivity.applicationContext)) {
-                currentActivity.runOnUiThread {
-                    delEventDialogLoadAds()
-                }
+                delEventDialogLoadAds()
             }
 
             //adsManager.activity.closeAds(TYPE_ADS.RewardAd);
@@ -215,7 +223,7 @@ class AdmRewardAd(
         }
 
         if (isCountAd) {
-            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_LOADING, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_LOADING, null, tag)
             return
         }
         isCountAd = true
@@ -247,7 +255,7 @@ class AdmRewardAd(
             return
         }
         if (isShowPopup) {
-            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_LOADING, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_LOADING, null, tag)
             return
         }
         isShowPopup = true
@@ -273,10 +281,12 @@ class AdmRewardAd(
     }
 
     private fun delEventDialogLoadAds() {
-        val dl= dialogLoadAds ?: return
-        if (dl.isShowing) {
-            dl.dismiss()
-            dialogLoadAds = null
+        currentActivity.runOnUiThread {
+            val dl= dialogLoadAds ?: return@runOnUiThread
+            if (dl.isShowing) {
+                dl.dismiss()
+                dialogLoadAds = null
+            }
         }
     }
 

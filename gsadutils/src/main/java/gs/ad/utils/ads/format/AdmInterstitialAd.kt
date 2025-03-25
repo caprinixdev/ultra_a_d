@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.util.Log
 import android.view.Window
+import androidx.collection.CircularArray
 import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.FullScreenContentCallback
@@ -21,12 +22,11 @@ import gs.ad.utils.utils.NetworkUtil
 import gs.ad.utils.utils.PreferencesManager
 import java.util.Timer
 import java.util.TimerTask
-import kotlin.concurrent.schedule
-import kotlin.concurrent.timerTask
 
 class AdmInterstitialAd(
     private var id: Int,
-    private var currentActivity: Activity
+    private var currentActivity: Activity,
+    private var listAdCircularArray: List<String>? = null
 ) : FullScreenContentCallback() {
     var tag = 0
 
@@ -35,68 +35,75 @@ class AdmInterstitialAd(
     private var mInterstitialAd: InterstitialAd? = null
     private var dialogLoadAds: Dialog? = null
 
-    var onAdFailToLoaded: ((AdmErrorType, String?) -> Unit?)? = null
-    var onAdLoaded: (() -> Unit)? = null
-    var onAdClosed: (() -> Unit)? = null
-    var onAdClicked: (() -> Unit)? = null
-    var onAdShow: (() -> Unit)? = null
+    var onAdFailToLoaded: ((AdmErrorType, String?, Int) -> Unit?)? = null
+    var onAdLoaded: ((Int) -> Unit)? = null
+    var onAdClosed: ((Int) -> Unit)? = null
+    var onAdClicked: ((Int) -> Unit)? = null
+    var onAdShow: ((Int) -> Unit)? = null
     private var isLoadingAd = false
 
-    private var timer : Timer? = Timer()
-    private var timerTask : TimerTask? = null
+    private var timer: Timer? = Timer()
+    private var timerTask: TimerTask? = null
     private fun createTimerTask() = object : TimerTask() {
         override fun run() {
             showAds()
         }
     }
+
     private var isShowPopup: Boolean = false
     private var isCountAd: Boolean = false
+    private var countTier: Int = 0
 
     fun setNewId(newValue: Int) {
         id = newValue
     }
 
-    fun setNewActivity(newValue: Activity){
+    fun setNewActivity(newValue: Activity) {
         currentActivity = newValue
     }
 
     private fun loadAds() {
-        if (AdmConfigAdId.listInterstitialAdUnitID.isEmpty()){
-            onAdFailToLoaded?.invoke(AdmErrorType.LIST_AD_ID_IS_EMPTY, null)
+        if (AdmConfigAdId.listInterstitialAdUnitID.isEmpty()) {
+            onAdFailToLoaded?.invoke(AdmErrorType.LIST_AD_ID_IS_EMPTY, null, tag)
             return
         }
 
-        if (id >= AdmConfigAdId.listInterstitialAdUnitID.count()){
-            onAdFailToLoaded?.invoke(AdmErrorType.AD_ID_IS_NOT_EXIST, null)
+        if (id >= AdmConfigAdId.listInterstitialAdUnitID.count()) {
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_ID_IS_NOT_EXIST, null, tag)
             return
         }
 
         if (mInterstitialAd != null) {
-            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_EXISTED, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_EXISTED, null, tag)
             return
         }
         if (!NetworkUtil.isNetworkAvailable(currentActivity.applicationContext)) {
-            onAdFailToLoaded?.invoke(AdmErrorType.NETWORK_IS_NOT_AVAILABLE, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.NETWORK_IS_NOT_AVAILABLE, null, tag)
             return
         }
 
         if (PreferencesManager.getInstance().isSUB()) {
-            onAdFailToLoaded?.invoke(AdmErrorType.CLIENT_HAVE_SUB, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.CLIENT_HAVE_SUB, null, tag)
             return
         }
 
         if (PreferencesManager.getInstance().isRemoveAds()) {
-            onAdFailToLoaded?.invoke(AdmErrorType.CLIENT_HAVE_BEEN_REMOVED_AD, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.CLIENT_HAVE_BEEN_REMOVED_AD, null, tag)
             return
         }
 
         if (isLoadingAd) {
-            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_LOADING, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_LOADING, null, tag)
             return
         }
         isLoadingAd = true
 
-        val adUnitId = AdmConfigAdId.getInterstitialAdUnitID(id)
+        var adUnitId = AdmConfigAdId.getInterstitialAdUnitID(id)
+        listAdCircularArray?.let {
+            adUnitId = it[countTier]
+            countTier = ++countTier % it.count()
+        }
+
         val adRequest = AdRequest.Builder().build()
         InterstitialAd.load(
             currentActivity, adUnitId, adRequest,
@@ -108,7 +115,7 @@ class AdmInterstitialAd(
                     isLoadingAd = false
                     mInterstitialAd = interstitialAd
                     mInterstitialAd?.fullScreenContentCallback = this@AdmInterstitialAd
-                    onAdLoaded?.invoke()
+                    onAdLoaded?.invoke(tag)
                 }
 
                 override fun onAdFailedToLoad(loadAdError: LoadAdError) {
@@ -116,19 +123,20 @@ class AdmInterstitialAd(
                     Log.d(TAG, "InterstitialAd $loadAdError")
                     isLoadingAd = false
                     mInterstitialAd = null
-                    onAdFailToLoaded?.invoke(AdmErrorType.OTHER, loadAdError.message)
+                    onAdFailToLoaded?.invoke(AdmErrorType.OTHER, loadAdError.message, tag)
                     closeAds()
                 }
             })
     }
 
     private fun closeAds() {
+        delEventDialogLoadAds()
         GlobalVariables.isShowPopup = false
         resetTimer()
-        onAdClosed?.invoke()
+        onAdClosed?.invoke(tag)
     }
 
-    private fun resetTimer(){
+    private fun resetTimer() {
         isCountAd = false
         isShowPopup = false
         timerTask?.cancel()
@@ -139,7 +147,7 @@ class AdmInterstitialAd(
     override fun onAdClicked() {
         // Called when a click is recorded for an ad.
         Log.d(TAG, "Ad was clicked.")
-        onAdClicked?.invoke()
+        onAdClicked?.invoke(tag)
     }
 
     override fun onAdDismissedFullScreenContent() {
@@ -155,7 +163,8 @@ class AdmInterstitialAd(
         // Called when ad fails to show.
         Log.e(TAG, "Ad failed to show fullscreen content.")
         mInterstitialAd = null
-        onAdFailToLoaded?.invoke(AdmErrorType.OTHER, adError.message)
+        onAdFailToLoaded?.invoke(AdmErrorType.OTHER, adError.message, tag)
+        closeAds()
     }
 
     override fun onAdImpression() {
@@ -166,11 +175,13 @@ class AdmInterstitialAd(
     override fun onAdShowedFullScreenContent() {
         // Called when ad is shown.
         Log.d(TAG, "Ad showed fullscreen content.")
-        onAdShow?.invoke()
+        onAdShow?.invoke(tag)
     }
 
     private fun showAds() {
-        if (PreferencesManager.getInstance().isSUB() || PreferencesManager.getInstance().isRemoveAds()) {
+        if (PreferencesManager.getInstance().isSUB() || PreferencesManager.getInstance()
+                .isRemoveAds()
+        ) {
             closeAds()
             return
         }
@@ -185,9 +196,7 @@ class AdmInterstitialAd(
             Log.d(TAG, "The interstitial ad wasn't ready yet.")
 
             if (!NetworkUtil.isNetworkAvailable(currentActivity.applicationContext)) {
-                currentActivity.runOnUiThread {
-                    delEventDialogLoadAds()
-                }
+                delEventDialogLoadAds()
             }
 
             //adsManager.activity.closeAds(TYPE_ADS.InterstitialAd);
@@ -205,13 +214,15 @@ class AdmInterstitialAd(
         loopAds: Int,
         onLoadingAd: (() -> Unit)?
     ) {
-        if (PreferencesManager.getInstance().isSUB() || PreferencesManager.getInstance().isRemoveAds()) {
+        if (PreferencesManager.getInstance().isSUB() || PreferencesManager.getInstance()
+                .isRemoveAds()
+        ) {
             closeAds()
             return
         }
 
         if (isCountAd) {
-            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_LOADING, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_LOADING, null, tag)
             return
         }
         isCountAd = true
@@ -244,7 +255,7 @@ class AdmInterstitialAd(
         }
 
         if (isShowPopup) {
-            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_LOADING, null)
+            onAdFailToLoaded?.invoke(AdmErrorType.AD_IS_LOADING, null, tag)
             return
         }
         isShowPopup = true
@@ -269,10 +280,12 @@ class AdmInterstitialAd(
     }
 
     private fun delEventDialogLoadAds() {
-        val dl= dialogLoadAds ?: return
-        if (dl.isShowing) {
-            dl.dismiss()
-            dialogLoadAds = null
+        currentActivity.runOnUiThread {
+            val dl = dialogLoadAds ?: return@runOnUiThread
+            if (dl.isShowing) {
+                dl.dismiss()
+                dialogLoadAds = null
+            }
         }
     }
 
