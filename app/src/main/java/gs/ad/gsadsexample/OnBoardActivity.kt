@@ -32,7 +32,7 @@ class OnBoardActivity : AppCompatActivity(){
     override fun onDestroy() {
         val list = GroupNativeAd.listOnBoardNativeAd
 
-        list.forEachIndexed { index, admNativeAd ->
+        list.forEach { (index, admNativeAd) ->
             admNativeAd?.destroyNativeAd()
             list[index] = null
         }

@@ -77,6 +77,8 @@ class OnboardPagerAdapter(
                     adContainer,
                     R.layout.layout_native_ad
                 )
+            }else{
+                adContainer.visibility = View.INVISIBLE
             }
 
 
@@ -129,6 +131,8 @@ class OnboardPagerAdapter(
                     adContainer,
                     R.layout.layout_native_ad_full
                 )
+            }else{
+                adContainer.visibility = View.INVISIBLE
             }
         }
     }

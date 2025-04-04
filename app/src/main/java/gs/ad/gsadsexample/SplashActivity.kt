@@ -161,7 +161,7 @@ class SplashActivity : AppCompatActivity() {
 
                 admNativeAd.tag = index
 
-                GroupNativeAd.listOnBoardNativeAd.add(admNativeAd)
+                GroupNativeAd.listOnBoardNativeAd[index] = admNativeAd
                 admNativeAd.preloadAd()
                 admNativeAd.onAdLoaded = {
                     countLoadAd += 1
