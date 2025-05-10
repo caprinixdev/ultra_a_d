@@ -62,6 +62,18 @@ class AdmInterstitialAd(
         currentActivity = newValue
     }
 
+    private fun getAdUnitId() : String{
+        var adUnitId = ""
+        if (id == -1){
+            val listCount = listAdCircularArray ?: AdmConfigAdId.listInterstitialAdUnitID
+            adUnitId = listCount[countTier]
+            countTier = ++countTier % listCount.count()
+        }else{
+            adUnitId = AdmConfigAdId.getInterstitialAdUnitID(id)
+        }
+        return adUnitId
+    }
+
     private fun loadAds() {
         if (AdmConfigAdId.listInterstitialAdUnitID.isEmpty()) {
             onAdFailToLoaded?.invoke(AdmErrorType.LIST_AD_ID_IS_EMPTY, null, tag)
@@ -98,11 +110,7 @@ class AdmInterstitialAd(
         }
         isLoadingAd = true
 
-        var adUnitId = AdmConfigAdId.getInterstitialAdUnitID(id)
-        listAdCircularArray?.let {
-            adUnitId = it[countTier]
-            countTier = ++countTier % it.count()
-        }
+        val adUnitId = getAdUnitId()
 
         val adRequest = AdRequest.Builder().build()
         InterstitialAd.load(

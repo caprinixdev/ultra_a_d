@@ -64,6 +64,18 @@ class AdmRewardAd(
         currentActivity = newValue
     }
 
+    private fun getAdUnitId() : String{
+        var adUnitId = ""
+        if (id == -1){
+            val listCount = listAdCircularArray ?: AdmConfigAdId.listBannerAdUnitID
+            adUnitId = listCount[countTier]
+            countTier = ++countTier % listCount.count()
+        }else{
+            adUnitId = AdmConfigAdId.getBannerAdUnitID(id)
+        }
+        return adUnitId
+    }
+
     private fun loadAds() {
         isReward = false
 
@@ -102,11 +114,7 @@ class AdmRewardAd(
         }
         isLoadingAd = true
 
-        var adUnitId = AdmConfigAdId.getRewardAdUnitID(id)
-        listAdCircularArray?.let {
-            adUnitId = it[countTier]
-            countTier = ++countTier % it.count()
-        }
+        val adUnitId = getAdUnitId()
 
         val adRequest = AdRequest.Builder().build()
 

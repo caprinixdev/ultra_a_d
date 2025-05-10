@@ -68,6 +68,18 @@ class AdmNativeAd(
         isFullScreen = newValue
     }
 
+    private fun getAdUnitId() : String{
+        var adUnitId = ""
+        if (id == -1){
+            val listCount = listAdCircularArray ?: AdmConfigAdId.listNativeAdUnitID
+            adUnitId = listCount[countTier]
+            countTier = ++countTier % listCount.count()
+        }else{
+            adUnitId = AdmConfigAdId.getNativeAdUnitID(id)
+        }
+        return adUnitId
+    }
+
     fun preloadAd() {
         if (AdmConfigAdId.listNativeAdUnitID.isEmpty()) {
             onAdFailToLoaded?.invoke(AdmErrorType.LIST_AD_ID_IS_EMPTY, null, tag)
@@ -109,11 +121,8 @@ class AdmNativeAd(
         }
         isLoadingAd = true
         Log.d(TAG, "id: $id")
-        var adUnitId = AdmConfigAdId.getNativeAdUnitID(id)
-        listAdCircularArray?.let {
-            adUnitId = it[countTier]
-            countTier = ++countTier % it.count()
-        }
+        val adUnitId = getAdUnitId()
+
         val builder = AdLoader.Builder(currentActivity, adUnitId)
 
         builder.forNativeAd { nativeAd ->
@@ -183,11 +192,8 @@ class AdmNativeAd(
 
         isLoadingAd = true
         Log.d(TAG, "id: $id")
-        var adUnitId = AdmConfigAdId.getNativeAdUnitID(id)
-        listAdCircularArray?.let {
-            adUnitId = it[countTier]
-            countTier = ++countTier % it.count()
-        }
+        val adUnitId = getAdUnitId()
+
         val builder = AdLoader.Builder(currentActivity, adUnitId)
 
         builder.forNativeAd { nativeAd ->

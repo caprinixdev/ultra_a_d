@@ -13,7 +13,7 @@ Như hình:
 #### dependencies
 Cài thư viện
 ```gradle
-implementation("com.github.caprinixdev:ultra_a_d:1.0.12")
+implementation("com.github.caprinixdev:ultra_a_d:1.0.13")
 ```
 Thêm các thư viện
 ```gradle
@@ -69,7 +69,8 @@ Gọi Load Ad:
 ```kotlin
 private var bannerAd : AdmBannerAd? = null
 
-bannerAd = AdmBannerAd(id = 0, currentActivity = this)
+bannerAd = AdmBannerAd(id = 0, currentActivity = this) // Nếu id = -1 thì sẽ gọi vòng lặp AdmConfigAdId.listBannerAdUnitID
+bannerAd?.loadAd(binding.bannerView)
 ```
 
 Listener
@@ -100,12 +101,27 @@ override fun onDestroy() {
 }
 ```
 
+Có thể sử dụng 1 list ad id riêng nếu như màn đó bị gọi nhiều lần (có thể sử dụng với tất cả các ad):
+```kotlin
+object GroupBannerAd {
+    var listBannerAd: HashMap<String, AdmBannerAd?> = HashMap()
+}
+
+val keyAd = this.javaClass.simpleName
+if(GroupBannerAd.listBannerAd[keyAd] == null){
+    bannerAd = AdmBannerAd(0, this, resources.getStringArray(R.array.banner_ad_main2_unit_id).toList())
+    GroupBannerAd.listBannerAd[keyAd] = bannerAd
+}else{
+    bannerAd = GroupBannerAd.listBannerAd[keyAd]
+}
+```
+
 ### NativeAd
 Gọi Load Ad:
 ```kotlin
 private var nativeAd: AdmNativeAd? = null
 
-nativeAd = AdmNativeAd(id = 0, context = applicationContext, isFullScreen = false)
+nativeAd = AdmNativeAd(id = 0, context = applicationContext, isFullScreen = false) // Nếu id = -1 thì sẽ gọi vòng lặp AdmConfigAdId.listNativeAdUnitID
 nativeAd?.loadAd(binding.nativeAdContainerView, R.layout.layout_native_ad)
 ```
 Dùng Preload Ad thì tạo 1 object list và dùng populateNativeAdView:
@@ -167,7 +183,7 @@ Show Ad
 ```kotlin
 private var interShowActivity2: AdmInterstitialAd? = null
 
-interShowActivity2 = AdmInterstitialAd(id = 0, currentActivity = this)
+interShowActivity2 = AdmInterstitialAd(id = 0, currentActivity = this) // Nếu id = -1 thì sẽ gọi vòng lặp AdmConfigAdId.listInterstitialAdUnitID
 interShowActivity2?.showPopupLoadAds { }
 ```
 
@@ -210,7 +226,7 @@ override fun onDestroy() {
 ```kotlin
 private var rewardedAdRemoveAd: AdmRewardAd? = null
 
-rewardedAdRemoveAd = AdmRewardAd(id = 0, currentActivity = this)
+rewardedAdRemoveAd = AdmRewardAd(id = 0, currentActivity = this) // Nếu id = -1 thì sẽ gọi vòng lặp AdmConfigAdId.listRewardAdUnitID
 ```
 
 Listener

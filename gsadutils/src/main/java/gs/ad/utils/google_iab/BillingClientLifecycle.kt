@@ -127,13 +127,15 @@ class BillingClientLifecycle(
     }
 
     fun getSubscriptionPrice(packageId: String): String? {
+        val regex = "[0-9]".toRegex()
         return getProductDetails(packageId)?.subscriptionOfferDetails?.
-            first()?.pricingPhases?.first{ s-> s.formattedPrice?.lowercase()?.contains("free") == false }?.formattedPrice
+            first()?.pricingPhases?.first{ s-> s.formattedPrice?.lowercase()?.contains(regex) == true }?.formattedPrice
     }
 
     fun getSubscriptionPrice(packageId: String, productId: String): String? {
+        val regex = "[0-9]".toRegex()
         return getSubscriptionDetails(packageId, productId)?.pricingPhases?.
-            first{ s-> s.formattedPrice?.lowercase()?.contains("free") == false }?.formattedPrice
+            first{ s-> s.formattedPrice?.lowercase()?.contains(regex) == true }?.formattedPrice
     }
 
     override fun onProductsFetched(productDetails: MutableList<ProductInfo>) {

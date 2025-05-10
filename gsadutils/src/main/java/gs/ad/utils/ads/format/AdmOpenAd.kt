@@ -50,6 +50,18 @@ class AdmOpenAd(
         currentActivity = newValue
     }
 
+    private fun getAdUnitId() : String{
+        var adUnitId = ""
+        if (id == -1){
+            val listCount = listAdCircularArray ?: AdmConfigAdId.listOpenAdUnitID
+            adUnitId = listCount[countTier]
+            countTier = ++countTier % listCount.count()
+        }else{
+            adUnitId = AdmConfigAdId.getOpenAdUnitID(id)
+        }
+        return adUnitId
+    }
+
     fun loadAds(isShowAd: Boolean = false) {
         if (AdmConfigAdId.listOpenAdUnitID.isEmpty()){
             onAdFailToLoaded?.invoke(AdmErrorType.LIST_AD_ID_IS_EMPTY, null, tag)
@@ -91,11 +103,7 @@ class AdmOpenAd(
         }
         isLoadingAd = true
 
-        var adUnitId = AdmConfigAdId.getOpenAdUnitID(id)
-        listAdCircularArray?.let {
-            adUnitId = it[countTier]
-            countTier = ++countTier % it.count()
-        }
+        val adUnitId = getAdUnitId()
         val act = currentActivity ?: return
 
         val adRequest = AdRequest.Builder().build()

@@ -67,6 +67,18 @@ class AdmBannerAd(
             return AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(act, adWidth)
         }
 
+    private fun getAdUnitId() : String{
+        var adUnitId = ""
+        if (id == -1){
+            val listCount = listAdCircularArray ?: AdmConfigAdId.listBannerAdUnitID
+            adUnitId = listCount[countTier]
+            countTier = ++countTier % listCount.count()
+        }else{
+            adUnitId = AdmConfigAdId.getBannerAdUnitID(id)
+        }
+        return adUnitId
+    }
+
     fun loadAd(adContainerView: ConstraintLayout, loadingLayout: Int? = null) {
         if (AdmConfigAdId.listBannerAdUnitID.isEmpty()) {
             onAdFailToLoaded?.invoke(AdmErrorType.LIST_AD_ID_IS_EMPTY, null, tag)
@@ -109,11 +121,8 @@ class AdmBannerAd(
         }
         isLoadingAd = true
 
-        var adUnitId = AdmConfigAdId.getBannerAdUnitID(id)
-        listAdCircularArray?.let {
-            adUnitId = it[countTier]
-            countTier = ++countTier % it.count()
-        }
+        val adUnitId = getAdUnitId()
+
         // Create a new ad view.
         val adView = AdView(currentActivity)
         val size = customSize ?: adSize

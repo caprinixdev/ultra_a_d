@@ -46,6 +46,11 @@
 
 
     <!--  AD Test  -->
+    <string-array name="banner_ad_main2_unit_id" translatable="false">
+        <item>ca-app-pub-3940256099942544/9214589741</item>
+        <item>ca-app-pub-3940256099942544/9214589741</item>
+        <item>ca-app-pub-3940256099942544/9214589741</item>
+    </string-array>
     <string-array name="banner_ad_unit_id" translatable="false">
         <item>ca-app-pub-3940256099942544/9214589741</item>
         <item>ca-app-pub-3940256099942544/9214589741</item>

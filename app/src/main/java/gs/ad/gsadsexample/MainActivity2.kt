@@ -3,6 +3,8 @@ package gs.ad.gsadsexample
 import android.os.Bundle
 import android.view.View.GONE
 import androidx.appcompat.app.AppCompatActivity
+import gs.ad.gsadsexample.ads.GroupBannerAd
+import gs.ad.gsadsexample.ads.GroupNativeAd
 import gs.ad.gsadsexample.databinding.ActivityMain2Binding
 import gs.ad.utils.ads.format.AdmBannerAd
 import gs.ad.utils.ads.format.AdmInterstitialAd
@@ -28,7 +30,13 @@ class MainActivity2 : AppCompatActivity() {
 
 
     private fun setUpAd() {
-        bannerAd = AdmBannerAd(1, this)
+        val keyAd = this.javaClass.simpleName
+        if(GroupBannerAd.listBannerAd[keyAd] == null){
+            bannerAd = AdmBannerAd(0, this, resources.getStringArray(R.array.banner_ad_main2_unit_id).toList())
+            GroupBannerAd.listBannerAd[keyAd] = bannerAd
+        }else{
+            bannerAd = GroupBannerAd.listBannerAd[keyAd]
+        }
 
         interBackMainActivity = AdmInterstitialAd(1, this)
         interBackMainActivity?.onAdClosed = {
