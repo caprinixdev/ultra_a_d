@@ -71,7 +71,7 @@ class AdmRewardAd(
             adUnitId = listCount[countTier]
             countTier = ++countTier % listCount.count()
         }else{
-            adUnitId = AdmConfigAdId.getBannerAdUnitID(id)
+            adUnitId = AdmConfigAdId.getRewardAdUnitID(id)
         }
         return adUnitId
     }
@@ -115,6 +115,7 @@ class AdmRewardAd(
         isLoadingAd = true
 
         val adUnitId = getAdUnitId()
+        Log.d(TAG, adUnitId)
 
         val adRequest = AdRequest.Builder().build()
 
