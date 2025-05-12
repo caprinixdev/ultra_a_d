@@ -67,7 +67,7 @@ class AdmRewardAd(
     private fun getAdUnitId() : String{
         var adUnitId = ""
         if (id == -1){
-            val listCount = listAdCircularArray ?: AdmConfigAdId.listBannerAdUnitID
+            val listCount = listAdCircularArray ?: AdmConfigAdId.listRewardAdUnitID
             adUnitId = listCount[countTier]
             countTier = ++countTier % listCount.count()
         }else{
