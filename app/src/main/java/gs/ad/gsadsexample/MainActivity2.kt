@@ -32,7 +32,7 @@ class MainActivity2 : AppCompatActivity() {
     private fun setUpAd() {
         val keyAd = this.javaClass.simpleName
         if(GroupBannerAd.listBannerAd[keyAd] == null){
-            bannerAd = AdmBannerAd(0, this, resources.getStringArray(R.array.banner_ad_main2_unit_id).toList())
+            bannerAd = AdmBannerAd(resources.getStringArray(R.array.banner_main).toList(), this, lifecycle)
             GroupBannerAd.listBannerAd[keyAd] = bannerAd
         }else{
             bannerAd = GroupBannerAd.listBannerAd[keyAd]
@@ -88,19 +88,16 @@ class MainActivity2 : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        bannerAd?.resumeBanner()
     }
 
     override fun onPause() {
         super.onPause()
-        bannerAd?.pauseBanner()
     }
 
     private fun destroyAd() {
         binding.bannerView.visibility = GONE
         binding.nativeAdContainerView.visibility = GONE
         nativeAd?.destroyNativeAd()
-        bannerAd?.destroyBanner()
     }
 
     override fun onDestroy() {

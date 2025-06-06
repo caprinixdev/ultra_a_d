@@ -60,10 +60,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setUpAd() {
-        bannerAd = AdmBannerAd(0, this)
+        bannerAd = AdmBannerAd(resources.getStringArray(R.array.banner_main).toList(), this, lifecycle)
         bannerAd?.onAdFailToLoaded = { admErrorType, errorMessage, tag ->
             runOnUiThread {
                 Log.d(TAG, "xxxyyy " + admErrorType.name + "," + errorMessage)
+            }
+        }
+        bannerAd?.onAdLoaded = {
+            runOnUiThread {
+                Log.d(TAG, "xxxyyy " + "Banner Ad Loaded")
             }
         }
 
@@ -133,8 +138,10 @@ class MainActivity : AppCompatActivity() {
                 val intent = Intent(this, SubscriptionActivity::class.java)
                 mLaunchSubForResult.launch(intent)
             } else {
-                openPlayStoreAccount("anime.girlfriend.app", SubscriptionProductId.Weekly.id)
-                Toast.makeText(this@MainActivity, "YOU HAVE SUB", Toast.LENGTH_SHORT).show()
+//                openPlayStoreAccount("anime.girlfriend.app", SubscriptionProductId.Weekly.id)
+//                Toast.makeText(this@MainActivity, "YOU HAVE SUB", Toast.LENGTH_SHORT).show()
+                val intent = Intent(this, SubscriptionActivity::class.java)
+                mLaunchSubForResult.launch(intent)
             }
         }
 
@@ -195,7 +202,6 @@ class MainActivity : AppCompatActivity() {
         binding.bannerView.visibility = GONE
         binding.nativeAdContainerView.visibility = GONE
         nativeAd?.destroyNativeAd()
-        bannerAd?.destroyBanner()
     }
 
     private fun loadNativeAd() {
@@ -204,7 +210,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadBannerAd() {
-        bannerAd?.loadAd(binding.bannerView, R.layout.loading_banner)
+//        bannerAd?.loadAd(binding.bannerView, R.layout.loading_banner)
     }
 
     private fun startShimmerLoading() {
@@ -222,12 +228,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        bannerAd?.resumeBanner()
     }
 
     override fun onPause() {
         super.onPause()
-        bannerAd?.pauseBanner()
     }
 
     override fun onDestroy() {
@@ -235,7 +239,6 @@ class MainActivity : AppCompatActivity() {
         interShowActivity2 = null
         interCountAd = null
         nativeAd = null
-        bannerAd = null
         rewardedAdRemoveAd = null
         mBillingClientLifecycle?.removeListener(this)
         super.onDestroy()

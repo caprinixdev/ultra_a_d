@@ -532,6 +532,13 @@
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toBottomOf="@id/sub_des_3" />
 
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/btn_fake_sub"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintStart_toStartOf="parent"/>
+
         </androidx.constraintlayout.widget.ConstraintLayout>
 
     </ScrollView>

@@ -26,6 +26,7 @@ class SubscriptionActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        supportActionBar?.hide()
         binding = ActivitySubscriptionBinding.inflate(layoutInflater)
         setContentView(binding?.root)
 
@@ -60,6 +61,15 @@ class SubscriptionActivity : AppCompatActivity() {
 
         clickOps1()
         setListeners()
+
+        binding?.btnFakeSub?.isChecked = PreferencesManager.getInstance().isLifetime()
+        binding?.btnFakeSub?.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) {
+                PreferencesManager.getInstance().purchaseLifetime()
+            } else {
+                PreferencesManager.getInstance().removeLifetime()
+            }
+        }
     }
 
     private fun setListeners() {
