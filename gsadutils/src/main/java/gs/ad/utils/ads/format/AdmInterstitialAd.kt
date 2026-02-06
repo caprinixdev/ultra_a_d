@@ -74,7 +74,7 @@ class AdmInterstitialAd(
         return adUnitId
     }
 
-    private fun loadAds() {
+     fun loadAds() {
         if (AdmConfigAdId.listInterstitialAdUnitID.isEmpty()) {
             onAdFailToLoaded?.invoke(AdmErrorType.LIST_AD_ID_IS_EMPTY, null, tag)
             return
@@ -186,7 +186,7 @@ class AdmInterstitialAd(
         onAdShow?.invoke(tag)
     }
 
-    private fun showAds() {
+     fun showAds() {
         if (PreferencesManager.getInstance().isSUB() || PreferencesManager.getInstance()
                 .isRemoveAds()
         ) {

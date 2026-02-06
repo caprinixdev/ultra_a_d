@@ -176,6 +176,7 @@ class AdmBannerAd(
         // Start loading the ad in the background.
         val extras = Bundle()
         if (isCollapsible) {
+            adView.setAdSize(adSize)
             extras.putString("collapsible", "bottom")
         }
         val adBuilder = AdRequest.Builder()
