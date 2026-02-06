@@ -292,7 +292,9 @@ class AdmInterstitialAd(
         currentActivity.runOnUiThread {
             val dl = dialogLoadAds ?: return@runOnUiThread
             if (dl.isShowing) {
-                dl.dismiss()
+                if(!currentActivity.isFinishing && !currentActivity.isDestroyed){
+                    dl.dismiss()
+                }
                 dialogLoadAds = null
             }
         }
