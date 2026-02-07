@@ -83,7 +83,7 @@ class AdmBannerAd(
         return adUnitId
     }
 
-    fun loadAd(adContainerView: ConstraintLayout, loadingLayout: Int? = null,isCollapsible: Boolean = false) {
+    fun loadAd(adContainerView: ConstraintLayout, loadingLayout: Int? = null,isCollapsible: Boolean = true) {
         if (AdmConfigAdId.listBannerAdUnitID.isEmpty()) {
             onAdFailToLoaded?.invoke(AdmErrorType.LIST_AD_ID_IS_EMPTY, null, tag)
             return
@@ -129,7 +129,7 @@ class AdmBannerAd(
 
         // Create a new ad view.
         val adView = AdView(currentActivity)
-        val size = customSize ?: adSize
+        val size =if (isCollapsible) adSize else customSize ?: adSize
         adView.adUnitId = adUnitId
         adView.adListener = this
 
@@ -170,19 +170,14 @@ class AdmBannerAd(
 //            bottomToBottom = adContainerView.id
 //        }
         // Start loading the ad in the background.
+        adView.setAdSize(size)
         val adBuilder = AdRequest.Builder()
-        val extras = Bundle()
-        if (isCollapsible) {
-            adView.setAdSize(adSize)
-            extras.putString("collapsible", "bottom")
-        }else{
-            adView.setAdSize(size)
-        }
-        val adRequest = if (!isCollapsible) adBuilder.build() else {
-            adBuilder.addNetworkExtrasBundle(
-                AdMobAdapter::class.java, extras
-            ).build()
-        }
+        val adRequest = adBuilder.apply {
+            if (isCollapsible) {
+                val extras = Bundle().apply { putString("collapsible", "bottom") }
+                addNetworkExtrasBundle(AdMobAdapter::class.java, extras)
+            }
+        }.build()
         adView.loadAd(adRequest)
         adView.visibility = View.VISIBLE
         adContainerView.visibility = View.VISIBLE
