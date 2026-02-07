@@ -2,6 +2,7 @@ package gs.ad.utils.ads.format
 
 import android.app.Activity
 import android.os.Build
+import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
@@ -10,6 +11,7 @@ import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
+import com.google.ads.mediation.admob.AdMobAdapter
 import com.google.android.gms.ads.AdListener
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
@@ -80,7 +82,11 @@ class AdmBannerAd(
         return adUnitId
     }
 
-    fun loadAd(adContainerView: ConstraintLayout, loadingLayout: Int? = null) {
+    fun loadAd(
+        adContainerView: ConstraintLayout,
+        loadingLayout: Int? = null,
+        isCollapsible: Boolean = true
+    ) {
         if (AdmConfigAdId.listBannerAdUnitID.isEmpty()) {
             onAdFailToLoaded?.invoke(AdmErrorType.LIST_AD_ID_IS_EMPTY, null, tag)
             return
@@ -168,7 +174,17 @@ class AdmBannerAd(
 //            bottomToBottom = adContainerView.id
 //        }
         // Start loading the ad in the background.
-        val adRequest = AdRequest.Builder().build()
+        val extras = Bundle()
+        if (isCollapsible) {
+            adView.setAdSize(adSize)
+            extras.putString("collapsible", "bottom")
+        }
+        val adBuilder = AdRequest.Builder()
+        val adRequest = if (!isCollapsible) adBuilder.build() else {
+            adBuilder.addNetworkExtrasBundle(
+                AdMobAdapter::class.java, extras
+            ).build()
+        }
         adView.loadAd(adRequest)
         adView.visibility = View.VISIBLE
         adContainerView.visibility = View.VISIBLE
