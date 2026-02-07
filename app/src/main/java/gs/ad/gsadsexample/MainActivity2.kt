@@ -31,12 +31,14 @@ class MainActivity2 : AppCompatActivity() {
 
     private fun setUpAd() {
         val keyAd = this.javaClass.simpleName
-        if(GroupBannerAd.listBannerAd[keyAd] == null){
-            bannerAd = AdmBannerAd(resources.getStringArray(R.array.banner_main).toList(), this, lifecycle)
+        if (GroupBannerAd.listBannerAd[keyAd] == null) {
+            bannerAd = AdmBannerAd(-1, this)
             GroupBannerAd.listBannerAd[keyAd] = bannerAd
-        }else{
+        } else {
             bannerAd = GroupBannerAd.listBannerAd[keyAd]
         }
+        bannerAd?.setNewActivity(this)
+
 
         interBackMainActivity = AdmInterstitialAd(1, this)
         interBackMainActivity?.onAdClosed = {
@@ -46,7 +48,7 @@ class MainActivity2 : AppCompatActivity() {
         }
 
         nativeAd = AdmNativeAd(3, this, false)
-
+        nativeAd?.setNewActivity(this)
         nativeAd?.onAdFailToLoaded = { admErrorType, errorMessage, tag ->
 
         }
@@ -116,7 +118,7 @@ class MainActivity2 : AppCompatActivity() {
         ) {
             destroyAd()
         } else {
-            bannerAd?.loadAd(binding.bannerView)
+            bannerAd?.loadAd(binding.bannerView, isCollapsible = true)
             nativeAd?.loadAd(binding.nativeAdContainerView, R.layout.layout_native_ad_origin)
         }
     }

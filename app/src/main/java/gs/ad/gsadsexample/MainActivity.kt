@@ -60,7 +60,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setUpAd() {
-        bannerAd = AdmBannerAd(resources.getStringArray(R.array.banner_main).toList(), this, lifecycle)
+        bannerAd = AdmBannerAd(-1, this)
+        bannerAd?.setNewActivity(this)
         bannerAd?.onAdFailToLoaded = { admErrorType, errorMessage, tag ->
             runOnUiThread {
                 Log.d(TAG, "xxxyyy " + admErrorType.name + "," + errorMessage)
