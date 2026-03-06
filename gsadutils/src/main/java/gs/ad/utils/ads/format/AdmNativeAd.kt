@@ -48,11 +48,10 @@ class AdmNativeAd(
     var nativeAd: NativeAd? = null
 
     var onAdFailToLoaded: ((AdmErrorType, String?, Int) -> Unit?)? = null
-    var onAdLoaded: ((Int) -> Unit)? = null
+    var onAdLoaded: ((NativeAd?) -> Unit)? = null
     var onAdClosed: ((Int) -> Unit)? = null
     var onAdClicked: ((Int) -> Unit)? = null
     var onAdShow: ((Int) -> Unit)? = null
-    var onAdPaid: ((AdValue) -> Unit)? = null
     private var isLoadingAd = false
     private var isDestroyed = false
     private var countTier: Int = 0
@@ -133,10 +132,6 @@ class AdmNativeAd(
                 return@forNativeAd
             }
             this.nativeAd = nativeAd
-            nativeAd.setOnPaidEventListener { adValue ->
-                Log.d(TAG, "Native ad paid: ${adValue.valueMicros}")
-                onAdPaid?.invoke(adValue)
-            }
         }
 
         val adOptions = NativeAdOptions.Builder()
@@ -208,10 +203,6 @@ class AdmNativeAd(
                 Log.d(TAG, "Native Ad destroy : $nameActivity")
                 nativeAd.destroy()
                 return@forNativeAd
-            }
-            nativeAd.setOnPaidEventListener { adValue ->
-                Log.d(TAG, "Native ad paid: ${adValue.valueMicros}")
-                onAdPaid?.invoke(adValue)
             }
             this.nativeAd = nativeAd
             populateNativeAdView(adContainerView, layoutNativeAdView)
@@ -458,7 +449,7 @@ class AdmNativeAd(
         super.onAdLoaded()
         Log.d(TAG, "native ads onAdLoaded: $nameActivity")
         isLoadingAd = false
-        onAdLoaded?.invoke(tag)
+        onAdLoaded?.invoke(nativeAd)
     }
 
     override fun onAdFailedToLoad(p0: LoadAdError) {

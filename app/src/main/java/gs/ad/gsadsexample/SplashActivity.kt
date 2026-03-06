@@ -2,10 +2,12 @@ package gs.ad.gsadsexample
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import gs.ad.gsadsexample.MainActivity.Companion.TAG
 import gs.ad.gsadsexample.ads.GroupNativeAd
 import gs.ad.gsadsexample.databinding.ActivitySplashBinding
 import gs.ad.utils.ads.AdmUMP
@@ -165,6 +167,9 @@ class SplashActivity : AppCompatActivity() {
                 admNativeAd.preloadAd()
                 admNativeAd.onAdLoaded = {
                     countLoadAd += 1
+                    it?.setOnPaidEventListener {
+                        Log.d(TAG, "NativeAd ad paid: ${it.valueMicros}")
+                    }
                 }
 
                 admNativeAd.onAdFailToLoaded = { admErrorType, errorMessage, tag ->

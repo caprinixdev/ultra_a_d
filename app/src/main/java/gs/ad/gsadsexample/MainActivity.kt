@@ -120,14 +120,15 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        nativeAd?.onAdLoaded = {
+        nativeAd?.onAdLoaded = { it ->
+            it?.setOnPaidEventListener {
+                Log.d(TAG, "NativeAd ad paid: ${it.valueMicros}")
+            }
             runOnUiThread {
                 stopShimmerLoading()
             }
         }
-        nativeAd?.onAdPaid = {
-            Log.d(TAG, "NativeAd ad paid: ${it.valueMicros}")
-        }
+
 
         rewardedAdRemoveAd = AdmRewardAd(0, this)
         rewardedAdRemoveAd?.onHaveReward = {

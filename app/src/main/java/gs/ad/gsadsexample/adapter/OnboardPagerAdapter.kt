@@ -75,9 +75,6 @@ class OnboardPagerAdapter(
             if (!PreferencesManager.getInstance().isSUB()) {
                 val nativeAd = GroupNativeAd.listOnBoardNativeAd[position]
                 nativeAd?.setNewActivity(currentActivity)
-                nativeAd?.onAdPaid = {
-                    Log.d("Adapter", "Native ad paid: ${it.valueMicros}")
-                }
                 nativeAd?.populateNativeAdView(
                     adContainer,
                     R.layout.layout_native_ad
@@ -132,9 +129,6 @@ class OnboardPagerAdapter(
             if (!PreferencesManager.getInstance().isSUB()) {
                 val nativeAd = GroupNativeAd.listOnBoardNativeAd[position]
                 nativeAd?.setNewActivity(currentActivity)
-                nativeAd?.onAdPaid = {
-                        Log.d("Adapter", "Native ad paid: ${it.valueMicros}")
-                }
                 nativeAd?.populateNativeAdView(
                     adContainer,
                     R.layout.layout_native_ad_full
