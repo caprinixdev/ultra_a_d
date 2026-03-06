@@ -13,6 +13,7 @@ import android.widget.Toast
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import com.google.android.gms.ads.OnPaidEventListener
 import gs.ad.gsadsexample.databinding.ActivityMainBinding
 import gs.ad.gsadsexample.sub.SubscriptionProductId
 import gs.ad.utils.ads.format.AdmBannerAd
@@ -71,12 +72,20 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 Log.d(TAG, "xxxyyy " + "Banner Ad Loaded")
             }
+            it?.onPaidEventListener = OnPaidEventListener { ad ->
+                Log.d(TAG, "Banner ad paid: ${ad.valueMicros}")
+            }
         }
 
         interShowActivity2 = AdmInterstitialAd(0, this)
         interShowActivity2?.onAdClosed = {
             runOnUiThread {
                 startActivity(Intent(this@MainActivity, MainActivity2::class.java))
+            }
+        }
+        interShowActivity2?.onAdLoaded = {
+            it?.onPaidEventListener = OnPaidEventListener { ad ->
+                Log.d(TAG, "InterAd ad paid: ${ad.valueMicros}")
             }
         }
         interShowActivity2?.onAdFailToLoaded = { admErrorType, errorMessage, tag ->
@@ -97,6 +106,11 @@ class MainActivity : AppCompatActivity() {
                 Log.d(TAG, "xxxyyy " + admErrorType.name + "," + errorMessage)
             }
         }
+        interCountAd?.onAdLoaded = {
+            it?.onPaidEventListener = OnPaidEventListener { ad ->
+                Log.d(TAG, "InterAd ad paid: ${ad.valueMicros}")
+            }
+        }
 
         nativeAd = AdmNativeAd(1, this, false)
         nativeAd?.onAdFailToLoaded = { admErrorType, errorMessage, tag ->
@@ -111,6 +125,9 @@ class MainActivity : AppCompatActivity() {
                 stopShimmerLoading()
             }
         }
+        nativeAd?.onAdPaid = {
+            Log.d(TAG, "NativeAd ad paid: ${it.valueMicros}")
+        }
 
         rewardedAdRemoveAd = AdmRewardAd(0, this)
         rewardedAdRemoveAd?.onHaveReward = {
@@ -122,6 +139,11 @@ class MainActivity : AppCompatActivity() {
         rewardedAdRemoveAd?.onAdFailToLoaded = { admErrorType, errorMessage, tag ->
             runOnUiThread {
                 Log.d(TAG, "xxxyyy " + admErrorType.name + "," + errorMessage)
+            }
+        }
+        rewardedAdRemoveAd?.onAdLoaded = {
+            it?.onPaidEventListener = OnPaidEventListener { ad ->
+                Log.d(TAG, "Reward ad paid: ${ad.valueMicros}")
             }
         }
     }

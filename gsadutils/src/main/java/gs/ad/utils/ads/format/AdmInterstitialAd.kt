@@ -36,7 +36,7 @@ class AdmInterstitialAd(
     private var dialogLoadAds: Dialog? = null
 
     var onAdFailToLoaded: ((AdmErrorType, String?, Int) -> Unit?)? = null
-    var onAdLoaded: ((Int) -> Unit)? = null
+    var onAdLoaded: ((InterstitialAd?) -> Unit)? = null
     var onAdClosed: ((Int) -> Unit)? = null
     var onAdClicked: ((Int) -> Unit)? = null
     var onAdShow: ((Int) -> Unit)? = null
@@ -123,7 +123,7 @@ class AdmInterstitialAd(
                     isLoadingAd = false
                     mInterstitialAd = interstitialAd
                     mInterstitialAd?.fullScreenContentCallback = this@AdmInterstitialAd
-                    onAdLoaded?.invoke(tag)
+                    onAdLoaded?.invoke(interstitialAd)
                 }
 
                 override fun onAdFailedToLoad(loadAdError: LoadAdError) {

@@ -3,6 +3,7 @@ package gs.ad.gsadsexample.adapter
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -11,6 +12,7 @@ import android.widget.TextView
 import androidx.cardview.widget.CardView
 import androidx.constraintlayout.widget.ConstraintLayout
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.gms.ads.OnPaidEventListener
 import gs.ad.gsadsexample.MainActivity
 import gs.ad.gsadsexample.OnBoardActivity
 import gs.ad.gsadsexample.R
@@ -73,6 +75,9 @@ class OnboardPagerAdapter(
             if (!PreferencesManager.getInstance().isSUB()) {
                 val nativeAd = GroupNativeAd.listOnBoardNativeAd[position]
                 nativeAd?.setNewActivity(currentActivity)
+                nativeAd?.onAdPaid = {
+                    Log.d("Adapter", "Native ad paid: ${it.valueMicros}")
+                }
                 nativeAd?.populateNativeAdView(
                     adContainer,
                     R.layout.layout_native_ad
@@ -127,6 +132,9 @@ class OnboardPagerAdapter(
             if (!PreferencesManager.getInstance().isSUB()) {
                 val nativeAd = GroupNativeAd.listOnBoardNativeAd[position]
                 nativeAd?.setNewActivity(currentActivity)
+                nativeAd?.onAdPaid = {
+                        Log.d("Adapter", "Native ad paid: ${it.valueMicros}")
+                }
                 nativeAd?.populateNativeAdView(
                     adContainer,
                     R.layout.layout_native_ad_full

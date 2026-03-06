@@ -30,7 +30,7 @@ class AdmOpenAd(
     private var mOpenAd: AppOpenAd? = null
 
     var onAdFailToLoaded: ((AdmErrorType, String?, Int) -> Unit?)? = null
-    var onAdLoaded: ((Int) -> Unit)? = null
+    var onAdLoaded: ((AppOpenAd?) -> Unit)? = null
     var onAdClosed: ((Int) -> Unit)? = null
     var onAdClicked: ((Int) -> Unit)? = null
     var onAdShow: ((Int) -> Unit)? = null
@@ -125,7 +125,7 @@ class AdmOpenAd(
                         ad.show(act)
                     }
 
-                    onAdLoaded?.invoke(tag)
+                    onAdLoaded?.invoke(ad)
                 }
 
                 override fun onAdFailedToLoad(loadAdError: LoadAdError) {

@@ -35,7 +35,7 @@ class AdmRewardAd(
     private var dialogLoadAds: Dialog? = null
 
     var onAdFailToLoaded: ((AdmErrorType, String?, Int) -> Unit?)? = null
-    var onAdLoaded: ((Int) -> Unit)? = null
+    var onAdLoaded: ((RewardedAd?) -> Unit)? = null
     var onAdClosed: ((Int) -> Unit)? = null
     var onAdClicked: ((Int) -> Unit)? = null
     var onAdShow: ((Int) -> Unit)? = null
@@ -137,7 +137,7 @@ class AdmRewardAd(
                 isLoadingAd = false
                 mRewardedAd = ad
                 mRewardedAd?.fullScreenContentCallback = this@AdmRewardAd
-                onAdLoaded?.invoke(tag)
+                onAdLoaded?.invoke(ad)
                 Log.d(TAG, "Ad was loaded.")
             }
         })

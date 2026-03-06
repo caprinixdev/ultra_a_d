@@ -36,7 +36,7 @@ class AdmBannerAd(
     var adView: AdView? = null
 
     var onAdFailToLoaded: ((AdmErrorType, String?, Int) -> Unit?)? = null
-    var onAdLoaded: ((Int) -> Unit)? = null
+    var onAdLoaded: ((AdView?) -> Unit)? = null
     var onAdClosed: ((Int) -> Unit)? = null
     var onAdClicked: ((Int) -> Unit)? = null
     var onAdShow: ((Int) -> Unit)? = null
@@ -223,7 +223,7 @@ class AdmBannerAd(
 
         adContainerView?.visibility = View.VISIBLE
         adView?.visibility = View.VISIBLE
-        onAdLoaded?.invoke(tag)
+        onAdLoaded?.invoke(adView)
     }
 
     override fun onAdClicked() {

@@ -8,6 +8,7 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.multidex.MultiDexApplication
+import com.google.android.gms.ads.OnPaidEventListener
 import gs.ad.gsadsexample.sub.ConsumableProductId
 import gs.ad.gsadsexample.sub.SubscriptionProductId
 import gs.ad.utils.ads.AdmConfigAdId
@@ -34,7 +35,11 @@ class AppOwner: MultiDexApplication(), Application.ActivityLifecycleCallbacks, D
         AdmConfigAdId.listOpenAdUnitID = resources.getStringArray(R.array.open_ad_unit_id).toList()
 
         admOpenAd = AdmOpenAd(0 ,applicationContext)
-
+        admOpenAd.onAdLoaded = {
+            it?.onPaidEventListener = OnPaidEventListener { ad ->
+                Log.d(TAG, "OpenAd ad paid: ${ad.valueMicros}")
+            }
+        }
         mBillingClientLifecycle = BillingClientLifecycle.build(applicationContext){
             licenseKey = context.getString(R.string.license_key)
             consumableIds = enumValues<ConsumableProductId>().map { it.id }
