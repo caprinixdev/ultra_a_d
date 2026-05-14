@@ -31,6 +31,7 @@ import com.android.billingclient.api.BillingClientStateListener;
 import com.android.billingclient.api.BillingFlowParams;
 import com.android.billingclient.api.BillingResult;
 import com.android.billingclient.api.ConsumeParams;
+import com.android.billingclient.api.PendingPurchasesParams;
 import com.android.billingclient.api.ProductDetails;
 import com.android.billingclient.api.Purchase;
 import com.android.billingclient.api.QueryProductDetailsParams;
@@ -96,7 +97,7 @@ public class BillingConnector {
      */
     private void init(Context context) {
         billingClient = BillingClient.newBuilder(context)
-                .enablePendingPurchases()
+                .enablePendingPurchases(PendingPurchasesParams.newBuilder().enableOneTimeProducts().build())
                 .setListener((billingResult, purchases) -> {
                     switch (billingResult.getResponseCode()) {
                         case OK:
@@ -357,7 +358,13 @@ public class BillingConnector {
     private void queryProductDetails(String productType, List<QueryProductDetailsParams.Product> productList) {
         QueryProductDetailsParams productDetailsParams = QueryProductDetailsParams.newBuilder().setProductList(productList).build();
 
-        billingClient.queryProductDetailsAsync(productDetailsParams, (billingResult, productDetailsList) -> {
+        billingClient.queryProductDetailsAsync(productDetailsParams, (billingResult, queryProductDetailsResult) -> {
+            List<ProductDetails> productDetailsList = queryProductDetailsResult.getProductDetailsList();
+            Log("Query " + productType + " billingResult=" + billingResult.getResponseCode()
+                    + " fetched=" + productDetailsList.size()
+                    + " unfetched=" + queryProductDetailsResult.getUnfetchedProductList().size());
+            queryProductDetailsResult.getUnfetchedProductList().forEach(p ->
+                    Log("Unfetched product: " + p.getProductId() + " type=" + p.getProductType() + " statusCode=" + p.getStatusCode()));
             if (billingResult.getResponseCode() == OK) {
                 if (productDetailsList.isEmpty()) {
                     Log("Query Product Details: data not found. Make sure product ids are configured on Play Console");

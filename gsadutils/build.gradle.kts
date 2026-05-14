@@ -1,16 +1,14 @@
 plugins {
-    id("com.android.library")
-    id("org.jetbrains.kotlin.android")
+    alias(libs.plugins.android.library)
     id("maven-publish")
 }
 
 android {
     namespace = "gs.ad.utils"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         minSdk = 24
-        targetSdk = 35
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -28,13 +26,22 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
-    kotlinOptions {
-        jvmTarget = "11"
-    }
 
     buildFeatures {
         viewBinding = true
         buildConfig = true
+    }
+
+    publishing {
+        singleVariant("release") {
+            withSourcesJar()
+        }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11
     }
 }
 
@@ -47,14 +54,14 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 
-    implementation ("com.google.android.gms:play-services-ads:23.5.0")
-    implementation ("com.google.android.ump:user-messaging-platform:3.1.0")
+    implementation ("com.google.android.gms:play-services-ads:25.2.0")
+    implementation ("com.google.android.ump:user-messaging-platform:4.0.0")
 
     //lifecycle + multidex
-    implementation ("androidx.lifecycle:lifecycle-process:2.8.7")
+    implementation ("androidx.lifecycle:lifecycle-process:2.10.0")
     implementation ("com.github.eriffanani:ContentLoader:1.2.0")
-    implementation ("com.android.billingclient:billing:7.1.1")
-    implementation ("com.google.guava:guava:32.0.1-jre")
+    implementation ("com.android.billingclient:billing:8.3.0")
+    implementation ("com.google.guava:guava:33.6.0-jre")
 
     implementation("com.facebook.shimmer:shimmer:0.5.0@aar")
 }
