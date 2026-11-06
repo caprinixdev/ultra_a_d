@@ -45,7 +45,7 @@ dependencyResolutionManagement {
 
 ```kotlin
 dependencies {
-    implementation("com.github.caprinixdev:ultra_a_d:1.0.22")
+    implementation("com.github.caprinixdev:ultra_a_d:1.0.24")
 }
 ```
 
