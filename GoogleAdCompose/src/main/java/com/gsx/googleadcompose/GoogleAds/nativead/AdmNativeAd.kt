@@ -134,7 +134,8 @@ class AdmNativeAd internal constructor() : NativeAdEventCallback {
             .build()
 
         NativeAdLoader.load(request, object : NativeAdLoaderCallback {
-            override fun onNativeAdLoaded(ad: NativeAd) {
+            // Callback đến từ thread nền -> về main: onResult đổi Compose state / AdmNativeSequenceState.
+            override fun onNativeAdLoaded(ad: NativeAd) = AdCore.onMain {
                 log("loaded ${tag()}")
                 ad.adEventCallback = this@AdmNativeAd
                 nativeAd = ad
@@ -142,7 +143,7 @@ class AdmNativeAd internal constructor() : NativeAdEventCallback {
                 onResult(ad)
             }
 
-            override fun onAdFailedToLoad(adError: LoadAdError) {
+            override fun onAdFailedToLoad(adError: LoadAdError) = AdCore.onMain {
                 log("load FAIL ${tag()}: ${adError.code} ${adError.message}")
                 fail(AdmErrorType.AD_IS_NOT_AVAILABLE)
                 onResult(null)
@@ -159,9 +160,10 @@ class AdmNativeAd internal constructor() : NativeAdEventCallback {
 
     // ============ NativeAdEventCallback (kế thừa AdEventCallback) ============
 
-    override fun onAdImpression() { log("impression ${tag()}"); onImpression() }
-    override fun onAdClicked() { log("clicked ${tag()}"); onClicked() }
-    override fun onAdPaid(value: AdValue) {
+    // Event callback đến từ thread nền -> về main trước khi gọi hook app.
+    override fun onAdImpression() = AdCore.onMain { log("impression ${tag()}"); onImpression() }
+    override fun onAdClicked() = AdCore.onMain { log("clicked ${tag()}"); onClicked() }
+    override fun onAdPaid(value: AdValue) = AdCore.onMain {
         log("paid ${tag()}: ${value.valueMicros} ${value.currencyCode}")
         onPaid(value)
     }

@@ -145,8 +145,9 @@ class AdmBannerAd internal constructor() : BannerAdEventCallback {
                 val ad = result.ad
                 ad.adEventCallback = this
                 ad.bannerAdRefreshCallback = object : BannerAdRefreshCallback {
-                    override fun onAdRefreshed() { log("refreshed ${tag()}"); onRefreshed() }
-                    override fun onAdFailedToRefresh(adError: LoadAdError) {
+                    // Refresh callback đến từ thread nền -> về main trước khi gọi hook app.
+                    override fun onAdRefreshed() = AdCore.onMain { log("refreshed ${tag()}"); onRefreshed() }
+                    override fun onAdFailedToRefresh(adError: LoadAdError) = AdCore.onMain {
                         log("refresh FAIL ${tag()}: ${adError.code} ${adError.message}")
                     }
                 }
@@ -172,9 +173,10 @@ class AdmBannerAd internal constructor() : BannerAdEventCallback {
 
     // =========== BannerAdEventCallback (kế thừa AdEventCallback) ===========
 
-    override fun onAdImpression() { log("impression ${tag()}"); onImpression() }
-    override fun onAdClicked() { log("clicked ${tag()}"); onClicked() }
-    override fun onAdPaid(value: AdValue) {
+    // Event callback đến từ thread nền (GMA Next-Gen) -> về main trước khi gọi hook app.
+    override fun onAdImpression() = AdCore.onMain { log("impression ${tag()}"); onImpression() }
+    override fun onAdClicked() = AdCore.onMain { log("clicked ${tag()}"); onClicked() }
+    override fun onAdPaid(value: AdValue) = AdCore.onMain {
         log("paid ${tag()}: ${value.valueMicros} ${value.currencyCode}")
         onPaid(value)
     }

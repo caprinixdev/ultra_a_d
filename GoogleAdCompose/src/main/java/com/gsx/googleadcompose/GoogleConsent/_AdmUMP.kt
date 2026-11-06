@@ -133,15 +133,15 @@ class _AdmUMP(private val activity: Activity) {
     private fun initializeAds(testDeviceHashedIds: List<String>, onAdsInitialized: () -> Unit = {}) {
         if (isAdsInitCalled.getAndSet(true)) return
 
-        val appId = readAppId()
-        if (appId == null) {
-            Log.e(TAG, "Missing manifest meta-data com.google.android.gms.ads.APPLICATION_ID")
-            isAdsInitCalled.set(false)
-            return
-        }
-
-        // GMA Next-Gen SDK phải init ngoài main thread để tránh ANR.
+        // GMA Next-Gen SDK phải init ngoài main thread để tránh ANR. Đọc App ID (PackageManager = binder call)
+        // cũng làm luôn ở đây.
         CoroutineScope(Dispatchers.IO).launch {
+            val appId = readAppId()
+            if (appId == null) {
+                Log.e(TAG, "Missing manifest meta-data com.google.android.gms.ads.APPLICATION_ID")
+                isAdsInitCalled.set(false)
+                return@launch
+            }
             initialize(
                 activity.applicationContext,
                 InitializationConfig.Builder(appId).build(),

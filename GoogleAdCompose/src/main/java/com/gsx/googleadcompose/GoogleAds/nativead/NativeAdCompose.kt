@@ -21,10 +21,13 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.graphics.drawable.toBitmap
 import com.google.android.libraries.ads.mobile.sdk.common.AdChoicesView
 import com.google.android.libraries.ads.mobile.sdk.nativead.MediaView
 import com.google.android.libraries.ads.mobile.sdk.nativead.NativeAd
@@ -241,6 +244,14 @@ fun NativeAdButton(
         Text(text = text)
     }
 }
+
+/**
+ * Icon của [ad] dạng [ImageBitmap], nhớ theo ad. `toBitmap()` thường phải scale/vẽ lại ra bitmap mới
+ * (drawable scale theo density) -> KHÔNG gọi thẳng trong composable, mỗi recomposition lại cấp phát.
+ */
+@Composable
+internal fun rememberAdIcon(ad: NativeAd): ImageBitmap? =
+    remember(ad) { ad.icon?.drawable?.toBitmap()?.asImageBitmap() }
 
 private fun NativeAdView.register(nativeAd: NativeAd, mediaView: MediaView?) {
     if (mediaView != null) {

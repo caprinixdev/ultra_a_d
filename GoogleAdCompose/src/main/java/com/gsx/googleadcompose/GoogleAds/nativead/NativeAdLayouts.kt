@@ -42,14 +42,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.graphics.drawable.toBitmap
 import com.google.android.libraries.ads.mobile.sdk.nativead.NativeAd
 import com.gsx.googleadcompose.GoogleAds.ShimmerBox
 import kotlinx.coroutines.delay
@@ -164,11 +162,11 @@ fun NativeAdNormalLayout(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                ad.icon?.drawable?.toBitmap()?.let { bmp ->
+                rememberAdIcon(ad)?.let { bmp ->
                     NativeAdIconView(Modifier
                         .size(52.dp)
                         .clip(RoundedCornerShape(10.dp))) {
-                        Image(bitmap = bmp.asImageBitmap(), contentDescription = "icon")
+                        Image(bitmap = bmp, contentDescription = "icon")
                     }
                 }
                 Column(
@@ -282,11 +280,11 @@ fun NativeAdSmallLayout(
         ) {
             // ----- Hàng icon + content -----
             Row(verticalAlignment = Alignment.CenterVertically) {
-                ad.icon?.drawable?.toBitmap()?.let { bmp ->
+                rememberAdIcon(ad)?.let { bmp ->
                     NativeAdIconView(Modifier
                         .size(52.dp)
                         .clip(RoundedCornerShape(10.dp))) {
-                        Image(bitmap = bmp.asImageBitmap(), contentDescription = "icon")
+                        Image(bitmap = bmp, contentDescription = "icon")
                     }
                 }
                 Column(
@@ -382,11 +380,11 @@ fun NativeAdSmall2Layout(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // ----- Content trái -----
-            ad.icon?.drawable?.toBitmap()?.let { bmp ->
+            rememberAdIcon(ad)?.let { bmp ->
                 NativeAdIconView(Modifier
                     .size(52.dp)
                     .clip(RoundedCornerShape(10.dp))) {
-                    Image(bitmap = bmp.asImageBitmap(), contentDescription = "icon")
+                    Image(bitmap = bmp, contentDescription = "icon")
                 }
             }
             Column(
@@ -549,11 +547,11 @@ fun NativeAdCollapsibleLayout(
                     .height(IntrinsicSize.Min),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                ad.icon?.drawable?.toBitmap()?.let { bmp ->
+                rememberAdIcon(ad)?.let { bmp ->
                     NativeAdIconView(Modifier
                         .size(52.dp)
                         .clip(RoundedCornerShape(10.dp))) {
-                        Image(bitmap = bmp.asImageBitmap(), contentDescription = "icon")
+                        Image(bitmap = bmp, contentDescription = "icon")
                     }
                 }
                 Column(
@@ -769,11 +767,11 @@ fun NativeAdFullLayout(
                         .padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    ad.icon?.drawable?.toBitmap()?.let { bmp ->
+                    rememberAdIcon(ad)?.let { bmp ->
                         NativeAdIconView(Modifier
                             .size(67.dp)
                             .clip(RoundedCornerShape(12.dp))) {
-                            Image(bitmap = bmp.asImageBitmap(), contentDescription = "icon")
+                            Image(bitmap = bmp, contentDescription = "icon")
                         }
                     }
                     Column(modifier = Modifier

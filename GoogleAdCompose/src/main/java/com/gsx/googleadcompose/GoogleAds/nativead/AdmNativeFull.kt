@@ -42,7 +42,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.text.font.FontWeight
@@ -50,7 +49,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.graphics.drawable.toBitmap
 import com.google.android.libraries.ads.mobile.sdk.nativead.NativeAd
 import kotlinx.coroutines.delay
 
@@ -227,9 +225,9 @@ fun NativeAdFullStoryLayout(
                     .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = barsSpace),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    ad.icon?.drawable?.toBitmap()?.let { bmp ->
+                    rememberAdIcon(ad)?.let { bmp ->
                         NativeAdIconView(Modifier.size(36.dp).clip(RoundedCornerShape(8.dp))) {
-                            Image(bitmap = bmp.asImageBitmap(), contentDescription = "icon")
+                            Image(bitmap = bmp, contentDescription = "icon")
                         }
                     }
                     Box(modifier = Modifier.weight(1f).padding(start = 12.dp)) {

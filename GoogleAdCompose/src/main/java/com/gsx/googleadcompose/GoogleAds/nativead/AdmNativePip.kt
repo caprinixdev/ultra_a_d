@@ -47,7 +47,6 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -60,10 +59,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.graphics.drawable.toBitmap
 import com.google.android.libraries.ads.mobile.sdk.common.AdValue
 import com.google.android.libraries.ads.mobile.sdk.nativead.NativeAd
 import com.google.android.libraries.ads.mobile.sdk.nativead.NativeAdEventCallback
+import com.gsx.googleadcompose.GoogleAds.AdCore
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -148,7 +147,7 @@ private class ReloadOnClickCallback(
     override fun onAdPaid(value: AdValue) = base.onAdPaid(value)
     override fun onAdClicked() {
         base.onAdClicked()
-        onClick()
+        AdCore.onMain(onClick)   // click đến từ thread nền -> đổi Compose state (reload) trên main
     }
 }
 
@@ -251,9 +250,9 @@ fun NativeAdPipLayout(
             NativeAdMediaView(Modifier.fillMaxWidth().weight(1f))
             Spacer(Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                ad.icon?.drawable?.toBitmap()?.let { bmp ->
+                rememberAdIcon(ad)?.let { bmp ->
                     NativeAdIconView(Modifier.size(32.dp).clip(RoundedCornerShape(6.dp))) {
-                        Image(bitmap = bmp.asImageBitmap(), contentDescription = "icon")
+                        Image(bitmap = bmp, contentDescription = "icon")
                     }
                 }
                 Column(modifier = Modifier.weight(1f).padding(start = 4.dp)) {

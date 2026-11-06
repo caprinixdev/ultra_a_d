@@ -4,6 +4,8 @@ import android.app.Activity
 import android.app.Application
 import android.content.Context
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import java.lang.ref.WeakReference
 
 /** Trạng thái chung cho ads: app context + cờ MobileAds + activity đang foreground. */
@@ -15,6 +17,17 @@ object AdCore {
     /** True sau khi MobileAds.initialize hoàn tất (set trong AdmUMP). */
     @Volatile
     var isMobileAdsReady: Boolean = false
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    /**
+     * Chạy [block] trên main thread (đang ở main -> chạy luôn, không thì post).
+     * GMA Next-Gen SDK gọi callback load/event trên thread NỀN -> mọi callback ad phải qua đây trước khi
+     * đụng state SDK, dialog, Compose state hay hook của app (navigate/toast chỉ an toàn trên main).
+     */
+    internal fun onMain(block: () -> Unit) {
+        if (Looper.myLooper() === Looper.getMainLooper()) block() else mainHandler.post(block)
+    }
 
     /** Activity đang resumed (foreground). WeakReference -> không giữ leak. */
     private var activityRef: WeakReference<Activity>? = null

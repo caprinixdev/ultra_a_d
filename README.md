@@ -53,6 +53,18 @@ dependencies {
 
 Lib đã `api(...)` sẵn `ads.mobile.sdk` (GMA Next-Gen) + `billing.ktx`, app không cần khai báo lại.
 
+**Bật R8 cho release** (Play Console › Android vitals › *DEX code optimization*). Lib tự mang keep rule cần thiết (kể cả rule WorkManager của AdMob — thiếu là crash `Failed to create an instance of androidx.work.impl.WorkDatabase` ngay lúc mở app), app không cần thêm rule nào cho lib:
+
+```kotlin
+buildTypes {
+    release {
+        optimization { enable = true }
+    }
+}
+```
+
+Mọi hook (`onLoaded`, `onDismissed`, `onError`, `onPaid`, `onReward`...) chạy trên **main thread** — gọi navigate/toast/đổi state thẳng trong hook được.
+
 ### 1.2 AdMob App ID trong manifest
 
 `AndroidManifest.xml` của app (UMP và Mobile Ads đều cần):

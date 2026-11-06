@@ -104,7 +104,8 @@ class AdmInterstitialAd internal constructor() : InterstitialAdEventCallback {
         log("load ${tag()}${if (customIds != null) " [custom]" else ""}")
 
         InterstitialAd.load(AdRequest.Builder(unit).build(), object : AdLoadCallback<InterstitialAd> {
-            override fun onAdLoaded(ad: InterstitialAd) {
+            // Callback đến từ thread nền (GMA Next-Gen) -> về main trước khi đụng state/dialog/hook.
+            override fun onAdLoaded(ad: InterstitialAd) = AdCore.onMain {
                 loading = false
                 ad.adEventCallback = this@AdmInterstitialAd
                 loadedAd = ad
@@ -113,7 +114,7 @@ class AdmInterstitialAd internal constructor() : InterstitialAdEventCallback {
                 showPendingIfAny()   // có show đang chờ -> show luôn
             }
 
-            override fun onAdFailedToLoad(adError: LoadAdError) {
+            override fun onAdFailedToLoad(adError: LoadAdError) = AdCore.onMain {
                 loading = false
                 currentUnit = null
                 log("load FAIL ${tag()}: ${adError.code} ${adError.message}")
@@ -241,19 +242,20 @@ class AdmInterstitialAd internal constructor() : InterstitialAdEventCallback {
 
     // ================ InterstitialAdEventCallback ===============
 
-    override fun onAdShowedFullScreenContent() { log("showed ${tag()}"); onShowed() }
-    override fun onAdImpression() { onImpression() }
-    override fun onAdClicked() { onClicked() }
-    override fun onAdPaid(value: AdValue) { onPaid(value) }
+    // Event callback cũng đến từ thread nền -> về main (hook app hay navigate/đổi Compose state).
+    override fun onAdShowedFullScreenContent() = AdCore.onMain { log("showed ${tag()}"); onShowed() }
+    override fun onAdImpression() = AdCore.onMain { onImpression() }
+    override fun onAdClicked() = AdCore.onMain { onClicked() }
+    override fun onAdPaid(value: AdValue) = AdCore.onMain { onPaid(value) }
 
-    override fun onAdDismissedFullScreenContent() {
+    override fun onAdDismissedFullScreenContent() = AdCore.onMain {
         log("dismissed ${tag()}")
         releasePopup()
         onDismissed()
         onComplete()
     }
 
-    override fun onAdFailedToShowFullScreenContent(fullScreenContentError: FullScreenContentError) {
+    override fun onAdFailedToShowFullScreenContent(fullScreenContentError: FullScreenContentError) = AdCore.onMain {
         log("show FAIL ${tag()}: $fullScreenContentError")
         fail(AdmErrorType.AD_IS_NOT_AVAILABLE)
     }

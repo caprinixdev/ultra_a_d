@@ -175,15 +175,16 @@ class AdmOpenAd internal constructor() : AppOpenAdEventCallback {
 
         val config = PreloadConfiguration(AdRequest.Builder(unit).build(), bufferSize)
         AppOpenAdPreloader.start(unit, config, object : PreloadCallback {
-            override fun onAdPreloaded(preloadId: String, responseInfo: ResponseInfo) {
+            // Callback preload đến từ thread nền -> về main trước khi đụng state/hook.
+            override fun onAdPreloaded(preloadId: String, responseInfo: ResponseInfo) = AdCore.onMain {
                 loadedAtMs = System.currentTimeMillis()
                 log("preloaded ${tag()}"); onAvailable(responseInfo)
-                mainHandler.post { if (wantShow) { wantShow = false; show(wantIndex, customIds = wantCustomIds) } }
+                if (wantShow) { wantShow = false; show(wantIndex, customIds = wantCustomIds) }
             }
-            override fun onAdsExhausted(preloadId: String) {
+            override fun onAdsExhausted(preloadId: String) = AdCore.onMain {
                 onExhausted()
             }
-            override fun onAdFailedToPreload(preloadId: String, adError: LoadAdError) {
+            override fun onAdFailedToPreload(preloadId: String, adError: LoadAdError) = AdCore.onMain {
                 log("preload FAIL ${tag()}: ${adError.code} ${adError.message}")
                 wantShow = false
                 fail(AdmErrorType.AD_IS_NOT_AVAILABLE)
@@ -240,17 +241,18 @@ class AdmOpenAd internal constructor() : AppOpenAdEventCallback {
 
     // ================ AppOpenAdEventCallback ====================
 
-    override fun onAdShowedFullScreenContent() {
+    // Event callback đến từ thread nền -> về main.
+    override fun onAdShowedFullScreenContent() = AdCore.onMain {
         log("showed ${tag()}")
         splashTimeout?.let { mainHandler.removeCallbacks(it) }   // đã show -> không để timeout skip
         splashTimeout = null
         onShowed()
     }
-    override fun onAdImpression() { onImpression() }
-    override fun onAdClicked() { onClicked() }
-    override fun onAdPaid(value: AdValue) { onPaid(value) }
+    override fun onAdImpression() = AdCore.onMain { onImpression() }
+    override fun onAdClicked() = AdCore.onMain { onClicked() }
+    override fun onAdPaid(value: AdValue) = AdCore.onMain { onPaid(value) }
 
-    override fun onAdDismissedFullScreenContent() {
+    override fun onAdDismissedFullScreenContent() = AdCore.onMain {
         log("dismissed ${tag()}")
         releasePopup()
         onDismissed()
@@ -259,7 +261,7 @@ class AdmOpenAd internal constructor() : AppOpenAdEventCallback {
         load(resumeIndex)     // dismiss -> nạp ad mới cho lần sau (no-op nếu buffer đang refill)
     }
 
-    override fun onAdFailedToShowFullScreenContent(fullScreenContentError: FullScreenContentError) {
+    override fun onAdFailedToShowFullScreenContent(fullScreenContentError: FullScreenContentError) = AdCore.onMain {
         log("show FAIL ${tag()}: $fullScreenContentError")
         fail(AdmErrorType.AD_IS_NOT_AVAILABLE)
     }
