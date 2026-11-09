@@ -4,7 +4,9 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.os.Bundle
+import android.os.SystemClock
 import android.util.Log
+import android.view.ViewGroup
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.wrapContentHeight
@@ -12,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -33,6 +36,8 @@ import com.gsx.googleadcompose.data.AdmConfigAdId
 import com.gsx.googleadcompose.error.AdmErrorType
 import com.gsx.googleadcompose.helper.NetworkHelper
 import com.gsx.googleadcompose.utils.PreferencesManager
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 
 /**
  * Kích cỡ banner. Next-Gen SDK BỎ legacy `SMART_BANNER` -> [ADAPTIVE] = adaptive anchored full-width
@@ -90,6 +95,8 @@ class AdmBannerAd internal constructor() : BannerAdEventCallback {
     var collapsible: AdmBannerCollapsible = AdmBannerCollapsible.NONE
     /** Bề rộng (dp) để tính adaptive size. <=0 -> tự lấy bề rộng màn. */
     var adWidthDp: Int = 0
+    /** Số ID dự phòng thử thêm khi ID đang dùng không có ad (chỉ khi xoay vòng, `index = -1`). */
+    var maxFallbackUnits: Int = DEFAULT_MAX_FALLBACK_UNITS
 
     /** Kênh báo lỗi (xem [AdmErrorType]). Premium/offline/UMP chưa sẵn -> báo về đây, không render. */
     var onError: (AdmErrorType) -> Unit = {}
@@ -128,56 +135,101 @@ class AdmBannerAd internal constructor() : BannerAdEventCallback {
 
         val u = customIds?.filter { it.isNotBlank() }?.takeIf { it.isNotEmpty() } ?: units()
         if (u.isEmpty()) { fail(AdmErrorType.LIST_AD_ID_IS_EMPTY); return null }
-        val idx = if (index < 0) nextIndex(u.size) else index
-        val unit = u.getOrNull(idx) ?: run { fail(AdmErrorType.AD_ID_IS_NOT_EXIST); return null }
-        unitId = unit
-        currentIndex = idx
+        val chain = AdUnitChain.build(u, index, maxFallbackUnits) { CURSOR.next(u.size) }
+            ?: run { fail(AdmErrorType.AD_ID_IS_NOT_EXIST); return null }
 
         val adSize = adSize(activity)
-        log("load ${tag()} size=$adSize collapsible=$collapsible${if (customIds != null) " [custom]" else ""}")
-        val builder = BannerAdRequest.Builder(unit, adSize)
-        if (collapsible != AdmBannerCollapsible.NONE) {
-            val extras = Bundle().apply { putString("collapsible", collapsible.value) }
-            builder.putAdSourceExtrasBundle(AdMobAdapter::class.java, extras)
-        }
-        return when (val result = BannerAd.load(builder.build())) {
-            is AdLoadResult.Success -> {
-                val ad = result.ad
-                ad.adEventCallback = this
-                ad.bannerAdRefreshCallback = object : BannerAdRefreshCallback {
-                    // Refresh callback đến từ thread nền -> về main trước khi gọi hook app.
-                    override fun onAdRefreshed() = AdCore.onMain { log("refreshed ${tag()}"); onRefreshed() }
-                    override fun onAdFailedToRefresh(adError: LoadAdError) = AdCore.onMain {
-                        log("refresh FAIL ${tag()}: ${adError.code} ${adError.message}")
+        var attempt = 0
+        while (true) {
+            val next = chain.next() ?: break
+            unitId = next.unitId
+            currentIndex = next.index
+            val startedAt = SystemClock.elapsedRealtime()
+            log("load ${tag()} size=$adSize collapsible=$collapsible${if (attempt > 0) " [dự phòng $attempt]" else ""}")
+            report(AdmAdEventType.LOAD_REQUEST, attempt = attempt)
+
+            val builder = BannerAdRequest.Builder(next.unitId, adSize)
+            if (collapsible != AdmBannerCollapsible.NONE) {
+                val extras = Bundle().apply { putString("collapsible", collapsible.value) }
+                builder.putAdSourceExtrasBundle(AdMobAdapter::class.java, extras)
+            }
+            val result = try {
+                BannerAd.load(builder.build())
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Log.w(TAG, "load exception ${tag()}", error)
+                break
+            }
+            val latency = SystemClock.elapsedRealtime() - startedAt
+            when (result) {
+                is AdLoadResult.Success -> {
+                    val ad = result.ad
+                    ad.adEventCallback = this
+                    ad.bannerAdRefreshCallback = object : BannerAdRefreshCallback {
+                        // Refresh callback đến từ thread nền -> về main trước khi gọi hook app.
+                        override fun onAdRefreshed() = AdCore.onMain { log("refreshed ${tag()}"); onRefreshed() }
+                        override fun onAdFailedToRefresh(adError: LoadAdError) = AdCore.onMain {
+                            log("refresh FAIL ${tag()}: ${adError.code} ${adError.message}")
+                        }
                     }
+                    bannerAd = ad
+                    log("loaded ${tag()}")
+                    report(
+                        AdmAdEventType.LOAD_SUCCESS,
+                        attempt = attempt,
+                        latencyMs = latency,
+                        adSource = ad.getResponseInfo().adSourceName(),
+                    )
+                    onLoaded(ad)
+                    return ad
                 }
-                bannerAd = ad
-                log("loaded ${tag()}")
-                onLoaded(ad)
-                ad
+                is AdLoadResult.Failure -> {
+                    val error = result.error
+                    log("load FAIL ${tag()}: ${error.code} ${error.message}")
+                    report(
+                        AdmAdEventType.LOAD_FAIL,
+                        attempt = attempt,
+                        errorCode = error.code.name,
+                        errorMessage = error.message,
+                        latencyMs = latency,
+                    )
+                    if (!error.code.allowsFallback()) break
+                }
             }
-            is AdLoadResult.Failure -> {
-                log("load FAIL ${tag()}: ${result.error.code} ${result.error.message}")
-                fail(AdmErrorType.AD_IS_NOT_AVAILABLE)
-                null
-            }
+            if (chain.hasNext) delay(AD_FALLBACK_DELAY_MS)
+            attempt++
         }
+        fail(AdmErrorType.AD_IS_NOT_AVAILABLE)
+        return null
     }
 
     /** Hủy ad (gọi khi rời màn). */
     fun destroy() {
         log("destroy ${tag()}")
-        bannerAd?.destroy()
+        runCatching { bannerAd?.destroy() }
         bannerAd = null
     }
 
     // =========== BannerAdEventCallback (kế thừa AdEventCallback) ===========
 
     // Event callback đến từ thread nền (GMA Next-Gen) -> về main trước khi gọi hook app.
-    override fun onAdImpression() = AdCore.onMain { log("impression ${tag()}"); onImpression() }
-    override fun onAdClicked() = AdCore.onMain { log("clicked ${tag()}"); onClicked() }
+    override fun onAdImpression() = AdCore.onMain {
+        log("impression ${tag()}")
+        report(AdmAdEventType.IMPRESSION)
+        onImpression()
+    }
+
+    override fun onAdClicked() = AdCore.onMain {
+        log("clicked ${tag()}")
+        AdCore.noteAdClicked()
+        report(AdmAdEventType.CLICK)
+        onClicked()
+    }
+
     override fun onAdPaid(value: AdValue) = AdCore.onMain {
         log("paid ${tag()}: ${value.valueMicros} ${value.currencyCode}")
+        report(AdmAdEventType.PAID, valueMicros = value.valueMicros, currencyCode = value.currencyCode)
         onPaid(value)
     }
 
@@ -228,16 +280,36 @@ class AdmBannerAd internal constructor() : BannerAdEventCallback {
 
     private fun units(): List<String> = AdmConfigAdId.listBannerAdUnitID.filter { it.isNotBlank() }
 
-    /** Index kế tiếp (xoay vòng), advance cursor chung mọi instance. */
-    private fun nextIndex(size: Int): Int {
-        val i = cursor % size
-        cursor = (cursor + 1) % size
-        return i
-    }
-
     private fun fail(type: AdmErrorType) {
         log("ERROR: $type")
+        report(AdmAdEventType.ERROR, errorCode = type.name)
         onError(type)
+    }
+
+    private fun report(
+        type: AdmAdEventType,
+        attempt: Int? = null,
+        errorCode: String? = null,
+        errorMessage: String? = null,
+        latencyMs: Long? = null,
+        adSource: String? = null,
+        valueMicros: Long? = null,
+        currencyCode: String? = null,
+    ) {
+        AdmAdDiagnostics.report(
+            AdmAdEvent(
+                format = AdmAdFormat.BANNER,
+                type = type,
+                adUnitId = unitId,
+                errorCode = errorCode,
+                errorMessage = errorMessage,
+                latencyMs = latencyMs,
+                adSource = adSource,
+                attempt = attempt,
+                valueMicros = valueMicros,
+                currencyCode = currencyCode,
+            )
+        )
     }
 
     private fun log(msg: String) {
@@ -246,7 +318,7 @@ class AdmBannerAd internal constructor() : BannerAdEventCallback {
 
     private companion object {
         const val TAG = "GoogleAds/Banner"
-        private var cursor = 0   // xoay vòng unit id chung mọi instance
+        val CURSOR = AdUnitCursor()   // xoay vòng unit id chung mọi instance
     }
 }
 
@@ -267,7 +339,14 @@ fun AdmBanner(
     configure: AdmBannerAd.() -> Unit = {},
 ) {
     val controller = remember { AdmBannerAd() }
-    // Re-apply mỗi recomposition -> nhận size/collapsible/onError mới (setter rẻ, không tốn gì).
+    // Re-apply mỗi recomposition -> nhận size/collapsible/onError mới. Gỡ hook cũ trước: app hay bọc hook
+    // (`val old = onPaid; onPaid = { old(it); ... }`), không gỡ thì mỗi lần recompose lại bọc thêm 1 lớp.
+    controller.onError = {}
+    controller.onLoaded = {}
+    controller.onImpression = {}
+    controller.onClicked = {}
+    controller.onPaid = {}
+    controller.onRefreshed = {}
     controller.apply(configure)
 
     val context = LocalContext.current
@@ -306,7 +385,13 @@ fun AdmBanner(
         blocked -> Unit
         loaded != null && activity != null ->
             Box(modifier.fillMaxWidth().wrapContentHeight(), contentAlignment = Alignment.Center) {
-                AndroidView(factory = { loaded.getView(activity) })
+                // key: đổi ad -> dựng lại view, không giữ view của ad đã destroy.
+                key(loaded) {
+                    AndroidView(factory = {
+                        // View của ad có thể còn gắn ở lần dựng trước -> gỡ, tránh crash "already has a parent".
+                        loaded.getView(activity).also { (it.parent as? ViewGroup)?.removeView(it) }
+                    })
+                }
             }
         failed -> Unit                                                  // lỗi -> rỗng (đã báo onError)
         else -> AdShimmerBanner(modifier, heightDp = controller.size.placeholderHeightDp())  // đang load

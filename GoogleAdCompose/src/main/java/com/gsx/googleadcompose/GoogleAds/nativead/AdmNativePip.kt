@@ -29,6 +29,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -103,7 +104,7 @@ fun AdmNativePip(
     if (AdmNativeAd.isPremiumBlocked()) return
     val isPreview = LocalInspectionMode.current
     val controller = remember { AdmNativeAd() }
-    controller.apply(configure)
+    controller.applyConfig(configure)
     val currentOnClose by rememberUpdatedState(onClose)
 
     var generation by remember { mutableIntStateOf(0) }       // tăng -> load ad mới + hiện lại từ đầu
@@ -321,7 +322,7 @@ private fun PipCloseButton(modifier: Modifier = Modifier, onClick: () -> Unit) {
             progress = ((now - start).toFloat() / CLOSE_LOCK_MS).coerceIn(0f, 1f)
         }
     }
-    val enabled = progress >= 1f
+    val enabled by remember { derivedStateOf { progress >= 1f } }   // chỉ recompose lúc mở khoá, không mỗi frame
 
     Box(modifier = modifier.size(24.dp).clip(CircleShape).clickable(enabled = enabled, onClick = onClick)) {
         Canvas(Modifier.fillMaxSize()) {

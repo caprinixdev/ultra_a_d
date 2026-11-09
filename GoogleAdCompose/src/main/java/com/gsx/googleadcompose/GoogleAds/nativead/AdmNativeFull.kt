@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -38,6 +37,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -60,7 +61,8 @@ import kotlinx.coroutines.delay
  *
  * - Truyền [nativeAds] (preload, app sở hữu) -> show, KHÔNG destroy. Ad null -> mượn ad khác trong list.
  * - [nativeAds] == null -> tự load [pages] ad ([index]/[customIds]), tự destroy khi rời màn.
- * - Không có ad nào sau thời gian chờ / premium -> gọi [onClose] luôn.
+ * - Không có ad nào sau thời gian chờ / premium -> gọi [onClose] luôn. Lỗi load chỉ báo qua onError khi
+ *   không trang nào có ad, nên app đừng coi 1 lần onError là phải đóng story sớm.
  *
  * ```
  * val inter = AdmInterstitial { onDismissed = { showStory = true } }
@@ -89,7 +91,11 @@ fun AdmNativeFullStory(
 
     // ---- Self-load: mỗi trang 1 controller (giữ ad + hook), destroy khi rời màn ----
     val controllers = remember { List(pages) { AdmNativeAd() } }
-    controllers.forEach { it.apply(configure) }
+    controllers.forEach {
+        it.applyConfig(configure)
+        // 1 trang hụt vẫn mượn được ad của trang khác: chỉ báo onError khi không trang nào có ad.
+        it.holdRetryableErrors = true
+    }
     val selfAds = remember { mutableStateListOf<NativeAd?>().apply { repeat(pages) { add(null) } } }
     val selfDone = remember { mutableStateListOf<Boolean>().apply { repeat(pages) { add(false) } } }
     LaunchedEffect(Unit) {
@@ -112,13 +118,18 @@ fun AdmNativeFullStory(
         ?: available.firstOrNull { it !in locked.values }
         ?: available.firstOrNull()
     LaunchedEffect(page, shown) { if (shown != null && locked[page] == null) locked[page] = shown }
-    LaunchedEffect(shown) { if (!selfLoad) shown?.adEventCallback = controllers[0] }   // hook impression/click/paid
+    LaunchedEffect(shown) { if (!selfLoad) shown?.let(controllers[0]::bindEvents) }   // hook impression/click/paid
 
     // ---- Không có ad nào (load xong hết / quá thời gian chờ) -> đóng ----
     var timedOut by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { delay(WAIT_AD_TIMEOUT_MS); timedOut = true }
     val noAd = shown == null && locked.isEmpty() && (timedOut || (selfLoad && selfDone.all { it }))
-    LaunchedEffect(noAd) { if (noAd && !isPreview) currentOnClose() }
+    LaunchedEffect(noAd) {
+        if (noAd && !isPreview) {
+            controllers.firstNotNullOfOrNull { it.heldError }?.let { controllers[0].onError(it) }
+            currentOnClose()
+        }
+    }
 
     // ---- Timer trang: đếm theo frame clock (không bị animator scale = 0 bỏ qua) ----
     val hasAd = shown != null
@@ -154,9 +165,10 @@ fun AdmNativeFullStory(
         }
 
         // ===== Overlay (ngoài NativeAdView -> không tính click ad) =====
+        // progress đổi mỗi frame -> chỉ đọc trong lambda ở pha vẽ, không recompose cả màn mỗi frame.
         StoryActionButton(
             isClose = isLast,
-            remaining = if (stepDone || !hasAd) 0f else 1f - progress,
+            remaining = { if (stepDone || !hasAd) 0f else 1f - progress },
             enabled = stepDone,
             modifier = Modifier
                 .align(Alignment.TopEnd)
@@ -174,12 +186,16 @@ fun AdmNativeFullStory(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             repeat(pages) { i ->
-                val fraction = when {
-                    i < page -> 1f
-                    i == page -> progress
-                    else -> 0f
-                }
-                StoryProgressBar(fraction, Modifier.weight(1f))
+                StoryProgressBar(
+                    fraction = {
+                        when {
+                            i < page -> 1f
+                            i == page -> progress
+                            else -> 0f
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                )
             }
         }
     }
@@ -286,21 +302,20 @@ fun NativeAdFullStoryLayout(
 
 /** Thanh progress 8dp bo tròn: nền xám, phần chạy trắng (nằm trong card tối). */
 @Composable
-private fun StoryProgressBar(fraction: Float, modifier: Modifier = Modifier) {
+private fun StoryProgressBar(fraction: () -> Float, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .height(8.dp)
             .clip(RoundedCornerShape(50))
-            .background(Color(0xFF6B6B6B)),
-    ) {
-        Box(
-            Modifier
-                .fillMaxHeight()
-                .fillMaxWidth(fraction)
-                .clip(RoundedCornerShape(50))
-                .background(Color.White)
-        )
-    }
+            .background(Color(0xFF6B6B6B))
+            .drawBehind {
+                drawRoundRect(
+                    color = Color.White,
+                    size = Size(size.width * fraction(), size.height),
+                    cornerRadius = CornerRadius(size.height / 2),
+                )
+            },
+    )
 }
 
 /**
@@ -310,7 +325,7 @@ private fun StoryProgressBar(fraction: Float, modifier: Modifier = Modifier) {
 @Composable
 private fun StoryActionButton(
     isClose: Boolean,
-    remaining: Float,
+    remaining: () -> Float,
     enabled: Boolean,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
@@ -334,13 +349,14 @@ private fun StoryActionButton(
                 drawLine(Color.White, Offset(22.5f * s, 16f * s), Offset(17.34f * s, 21f * s), sw, StrokeCap.Round)
             }
         }
-        if (remaining > 0f) {
-            Canvas(Modifier.fillMaxSize()) {
+        Canvas(Modifier.fillMaxSize()) {
+            val left = remaining()
+            if (left > 0f) {
                 val stroke = 2.dp.toPx()
                 drawArc(
                     color = Color.White,
                     startAngle = -90f,
-                    sweepAngle = 360f * remaining,
+                    sweepAngle = 360f * left,
                     useCenter = false,
                     topLeft = Offset(stroke / 2, stroke / 2),
                     size = Size(size.width - stroke, size.height - stroke),

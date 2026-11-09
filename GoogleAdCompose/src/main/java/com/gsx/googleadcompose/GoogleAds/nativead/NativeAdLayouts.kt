@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,8 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -135,6 +135,35 @@ internal fun NativeLayoutRender(
 }
 
 /**
+ * Hình nút CTA đặt trong [NativeAdCallToActionView]. CHỈ là hình vẽ, tuyệt đối không dùng `Button` hay
+ * `clickable`: Compose sẽ nuốt lượt chạm nên SDK không nhận được click, ad có impression mà bấm nút không ăn.
+ */
+@Composable
+private fun NativeAdCtaLabel(
+    callToAction: String?,
+    containerColor: Color,
+    contentColor: Color,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(containerColor)
+            .defaultMinSize(minWidth = 58.dp, minHeight = 40.dp)
+            .padding(horizontal = 24.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = callToAction ?: "Install",
+            color = contentColor,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.W700,
+            maxLines = 1,
+        )
+    }
+}
+
+/**
  * Layout NORMAL — native cỡ thường, đủ text. Card nền [backgroundColor], nút install full-width
  * màu [ctaColor]. Asset đăng ký qua wrapper -> click/impression track đúng policy.
  */
@@ -239,17 +268,7 @@ fun NativeAdNormalLayout(
 
             // ----- Nút install full-width màu ctaColor -----
             NativeAdCallToActionView(Modifier.fillMaxWidth()) {
-                Button(
-                    onClick = {},
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = ctaColor,
-                        contentColor = ctaTextColor,
-                    ),
-                ) {
-                    Text(text = ad.callToAction ?: "Install", fontWeight = FontWeight.W700)
-                }
+                NativeAdCtaLabel(ad.callToAction, ctaColor, ctaTextColor, Modifier.fillMaxWidth())
             }
         }
     }
@@ -335,21 +354,7 @@ fun NativeAdSmallLayout(
             }
             // ----- Nút install full-width bên dưới -----
             NativeAdCallToActionView(Modifier.fillMaxWidth()) {
-                Button(
-                    onClick = {},
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = ctaColor,
-                        contentColor = ctaTextColor,
-                    ),
-                ) {
-                    Text(
-                        text = ad.callToAction ?: "Install",
-                        fontWeight = FontWeight.W700,
-                        maxLines = 1
-                    )
-                }
+                NativeAdCtaLabel(ad.callToAction, ctaColor, ctaTextColor, Modifier.fillMaxWidth())
             }
         }
     }
@@ -434,21 +439,7 @@ fun NativeAdSmall2Layout(
             }
             // ----- Nút install full-height bên phải -----
             NativeAdCallToActionView(Modifier.fillMaxHeight()) {
-                Button(
-                    onClick = {},
-                    modifier = Modifier.fillMaxHeight(),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = ctaColor,
-                        contentColor = ctaTextColor,
-                    ),
-                ) {
-                    Text(
-                        text = ad.callToAction ?: "Install",
-                        fontWeight = FontWeight.W700,
-                        maxLines = 1
-                    )
-                }
+                NativeAdCtaLabel(ad.callToAction, ctaColor, ctaTextColor, Modifier.fillMaxHeight())
             }
         }
     }
@@ -600,21 +591,7 @@ fun NativeAdCollapsibleLayout(
                     }
                 }
                 NativeAdCallToActionView(Modifier.fillMaxHeight()) {
-                    Button(
-                        onClick = {},
-                        modifier = Modifier.fillMaxHeight(),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = ctaColor,
-                            contentColor = ctaTextColor,
-                        ),
-                    ) {
-                        Text(
-                            text = ad.callToAction ?: "Install",
-                            fontWeight = FontWeight.W700,
-                            maxLines = 1
-                        )
-                    }
+                    NativeAdCtaLabel(ad.callToAction, ctaColor, ctaTextColor, Modifier.fillMaxHeight())
                 }
             }
         }
@@ -794,20 +771,7 @@ fun NativeAdFullLayout(
                         }
                     }
                     NativeAdCallToActionView {
-                        Button(
-                            onClick = {},
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = ctaColor,
-                                contentColor = ctaTextColor
-                            ),
-                        ) {
-                            Text(
-                                text = ad.callToAction ?: "Install",
-                                fontWeight = FontWeight.W700,
-                                maxLines = 1
-                            )
-                        }
+                        NativeAdCtaLabel(ad.callToAction, ctaColor, ctaTextColor)
                     }
                 }
             }

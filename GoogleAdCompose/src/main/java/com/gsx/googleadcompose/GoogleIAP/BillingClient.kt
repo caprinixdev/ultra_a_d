@@ -30,8 +30,10 @@ import com.android.billingclient.api.queryPurchasesAsync
 import com.gsx.googleadcompose.GlobalVariables
 import com.gsx.googleadcompose.helper.DialogHelper
 import com.gsx.googleadcompose.utils.PreferencesManager
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -74,6 +76,10 @@ object BillingClient {
     private val isFetching = AtomicBoolean(false)
     private var initialized = false
 
+    // Gọi startConnection lúc client đang connect sẽ nhận DEVELOPER_ERROR -> lời gọi sau chờ chung lượt đang chạy.
+    private val connecting = AtomicBoolean(false)
+    private val connectWaiters = CopyOnWriteArrayList<() -> Unit>()
+
     // Token của sub đang active, dùng cho upgrade/downgrade.
     @Volatile private var currentSubToken: String? = null
 
@@ -108,7 +114,11 @@ object BillingClient {
         subscriptionIds: List<String> = emptyList(),
         listener: BillingListener? = null,
         autoRefreshOnForeground: Boolean = true,
-        scope: CoroutineScope = CoroutineScope(Dispatchers.IO),
+        scope: CoroutineScope = CoroutineScope(
+            SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, error ->
+                Log.w(TAG, "Billing coroutine lỗi", error)   // lỗi 1 giao dịch không được làm crash app
+            }
+        ),
     ) {
         if (initialized) return
         // Mỗi product ID chỉ được xuất hiện 1 lần (trong và giữa các list) để route đúng loại.
@@ -142,16 +152,12 @@ object BillingClient {
     }
 
     // Connect lần đầu foreground + query lại purchase mỗi lần foreground (theo khuyến nghị Google).
-    // Check mạng trước; offline thì hiện dialog retry (nếu có Activity), rồi mới fetch.
+    // Billing không chặn khi offline: quyền đã lưu giữ nguyên (restorePurchases chỉ thu hồi khi query thành công).
+    // Việc người dùng miễn phí phải có mạng là của OfflineGate, app có billing riêng cũng đi qua đó.
     private val foregroundObserver = object : DefaultLifecycleObserver {
         override fun onStart(owner: LifecycleOwner) {
             if (!initialized) return
-            val activity = currentActivity
-            if (activity != null) {
-                DialogHelper.requireNetwork(activity) { connectOrRefresh() }
-            } else {
-                connectOrRefresh()
-            }
+            connectOrRefresh()
         }
     }
 
@@ -368,11 +374,19 @@ object BillingClient {
             onConnected(onReady)
             return
         }
+        connectWaiters.add(onReady)
+        if (!connecting.compareAndSet(false, true)) {
+            log("startConnection: đang connect -> chờ chung")
+            return
+        }
         billingClient.startConnection(object : BillingClientStateListener {
             override fun onBillingSetupFinished(result: BillingResult) {
+                connecting.set(false)
+                val waiters = connectWaiters.toList()
+                connectWaiters.clear()
                 if (result.responseCode == PlayBillingClient.BillingResponseCode.OK) {
                     log("Billing ready.")
-                    onConnected(onReady)
+                    onConnected { waiters.forEach { it() } }
                 } else {
                     log("Billing setup FAILED: ${result.responseCode} ${result.debugMessage}")
                     dispatch { it.onBillingError(result.responseCode.toErrorType(), result) }
@@ -380,7 +394,8 @@ object BillingClient {
             }
 
             override fun onBillingServiceDisconnected() {
-                // v9 tự reconnect; không làm gì.
+                // v9 tự reconnect; chỉ nhả cờ để lần foreground sau connect lại được.
+                connecting.set(false)
             }
         })
     }
@@ -390,6 +405,7 @@ object BillingClient {
      * mất khi có mạng lại rồi chạy tiếp.
      */
     fun checkBilling(activity: Activity, onReady: () -> Unit = {}) {
+        // Chỉ dùng khi màn đó thật sự cần mạng: dialog này không tắt được.
         DialogHelper.requireNetwork(activity) { startConnection(onReady) }
     }
 
@@ -517,8 +533,14 @@ object BillingClient {
             val token = offerToken ?: (
                 offers.firstOrNull { o ->
                     o.pricingPhases.pricingPhaseList.any { it.priceAmountMicros == 0L }
-                } ?: offers.first()
-                ).offerToken
+                } ?: offers.firstOrNull()
+                )?.offerToken
+            if (token == null) {
+                // Play không trả offer nào cho user này: báo lỗi thay vì crash NoSuchElementException.
+                dispatch { it.onBillingError(BillingErrorType.PRODUCT_NOT_EXIST, null) }
+                log("purchase: $productId không có offer")
+                return null
+            }
             paramsBuilder.setOfferToken(token)
         }
         val flowParams = BillingFlowParams.newBuilder()
@@ -574,7 +596,12 @@ object BillingClient {
             val subs = queryOwned(ProductType.SUBS)
             val inApp = queryOwned(ProductType.INAPP)
             subs?.forEach { acknowledge(it) }
-            inApp?.forEach { acknowledge(it) }
+            inApp?.forEach { purchase ->
+                // Consumable còn tồn (app chết trước khi consume xong): phải consume để cấp item và mua lại được,
+                // acknowledge thì item kẹt ở trạng thái đã sở hữu mãi.
+                val consumableId = purchase.products.firstOrNull { it in consumableIds }
+                if (consumableId != null) consume(purchase, consumableId) else acknowledge(purchase)
+            }
             subs?.firstOrNull()?.purchaseToken?.let { currentSubToken = it }
 
             val ownsSub = subs?.isNotEmpty() == true

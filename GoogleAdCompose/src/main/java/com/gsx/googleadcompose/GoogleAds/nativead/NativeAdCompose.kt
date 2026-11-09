@@ -1,5 +1,8 @@
 package com.gsx.googleadcompose.GoogleAds.nativead
 
+import android.graphics.Bitmap
+import android.graphics.drawable.Drawable
+import android.util.Log
 import android.view.ViewGroup
 import android.widget.ImageView
 import androidx.compose.foundation.background
@@ -100,8 +103,9 @@ fun NativeAdView(
     val currentMediaView = mediaViewRef.value
 
     DisposableEffect(currentNativeAd, currentNativeAdView, currentMediaView) {
-        currentNativeAdView?.register(currentNativeAd, currentMediaView)
-        onDispose {}
+        var active = true
+        currentNativeAdView?.register(currentNativeAd, currentMediaView) { active }
+        onDispose { active = false }   // rời màn trước khi post chạy -> không đăng ký ad đã destroy
     }
 }
 
@@ -225,6 +229,7 @@ fun NativeAdAttribution(
     }
 }
 
+@Deprecated("Button nuốt lượt chạm: đặt trong NativeAdCallToActionView thì SDK không nhận click. Hãy vẽ nút bằng Box + Text.")
 @Composable
 fun NativeAdButton(
     text: String,
@@ -251,13 +256,37 @@ fun NativeAdButton(
  */
 @Composable
 internal fun rememberAdIcon(ad: NativeAd): ImageBitmap? =
-    remember(ad) { ad.icon?.drawable?.toBitmap()?.asImageBitmap() }
+    remember(ad) {
+        runCatching { ad.icon?.drawable?.toIconBitmap()?.asImageBitmap() }
+            .onFailure { Log.w("GoogleAds/Native", "Không vẽ được icon ad", it) }
+            .getOrNull()
+    }
 
-private fun NativeAdView.register(nativeAd: NativeAd, mediaView: MediaView?) {
+/**
+ * Giới hạn cỡ icon (ảnh gốc to -> tốn bộ nhớ, dễ OOM ở máy yếu). Drawable không có cỡ cố định (intrinsic = -1,
+ * vd ColorDrawable) mà gọi thẳng `toBitmap()` sẽ ném IllegalArgumentException ngay trong composition -> crash.
+ */
+private fun Drawable.toIconBitmap(): Bitmap {
+    val width = intrinsicWidth
+    val height = intrinsicHeight
+    if (width <= 0 || height <= 0) return toBitmap(MAX_ICON_PX, MAX_ICON_PX)
+    val scale = minOf(1f, MAX_ICON_PX.toFloat() / maxOf(width, height))
+    return toBitmap((width * scale).toInt().coerceAtLeast(1), (height * scale).toInt().coerceAtLeast(1))
+}
+
+private const val MAX_ICON_PX = 256
+
+private fun NativeAdView.register(nativeAd: NativeAd, mediaView: MediaView?, isActive: () -> Boolean) {
+    val doRegister = Runnable {
+        if (isActive()) {
+            runCatching { registerNativeAd(nativeAd, mediaView) }
+                .onFailure { Log.w("GoogleAds/Native", "registerNativeAd lỗi", it) }
+        }
+    }
     if (mediaView != null) {
         // Post để chắc MediaView đã đo xong (tránh validator 120x120 fail khi view còn 0x0).
-        mediaView.post { this.registerNativeAd(nativeAd, mediaView) }
+        mediaView.post(doRegister)
     } else {
-        this.registerNativeAd(nativeAd, null)
+        doRegister.run()
     }
 }

@@ -44,13 +44,15 @@ fun SplashScreen(
     // LaunchedEffect dưới (chạy trên main) để tránh "navigate phải trên main thread".
     var requestGo by remember { mutableStateOf(false) }
     val go: () -> Unit = { requestGo = true }
+    // Chờ cả consent xong: rời splash lúc form consent còn mở là đẩy màn sau xuống dưới form.
+    var consentDone by remember { mutableStateOf(false) }
 
     // Open ad splash = instance RIÊNG (tách khỏi resume), tự load+show, tự destroy khi rời splash.
     val openSplash = AdmOpen()
     val openIds = stringArrayResource(R.array.app_open_ad_units_custom).toList()   // đọc resource ở scope composable
 
-    LaunchedEffect(requestGo) {
-        if (requestGo && !navigated) {
+    LaunchedEffect(requestGo, consentDone) {
+        if (requestGo && consentDone && !navigated) {
             navigated = true
             openSplash.showFromSplash(customIds = openIds) { onDone() }
         }
@@ -62,7 +64,7 @@ fun SplashScreen(
         ump.initUMP(
             onAdsInitialized = {     AdmNativeSequenceState.init(listOf(0, 1, 2, 3,4))
             },
-            gatherConsentFinished = {},
+            gatherConsentFinished = { consentDone = true },
         )
     }
 

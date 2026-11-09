@@ -33,7 +33,7 @@ object NetworkHelper {
                     override fun onAvailable(network: Network) { current = network }
                     override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
                         current = network
-                        online.set(caps.isValidatedInternet())
+                        online.set(caps.hasInternet())
                     }
                     override fun onLost(network: Network) {
                         if (network == current) { current = null; online.set(false) }
@@ -46,8 +46,11 @@ object NetworkHelper {
     }
 
     /**
-     * True nếu thiết bị đang có kết nối internet đã xác thực (Wi-Fi, di động, ethernet).
-     * UMP consent + request ad cần cái này — offline sẽ fail với INTERNET_ERROR.
+     * True nếu thiết bị đang có mạng (Wi-Fi, di động, ethernet, VPN). UMP consent + request ad cần cái này.
+     *
+     * KHÔNG đòi `NET_CAPABILITY_VALIDATED`: cờ đó chỉ nói máy gọi được server kiểm tra của Google. Nó tắt trong
+     * vài giây sau khi đổi mạng, và có thể tắt hẳn với VPN / mạng chặn server đó dù internet vẫn chạy -> ad bị
+     * chặn oan. Mạng hỏng thật thì request tự fail.
      *
      * Chỉ đọc cache -> gọi từ main thread an toàn, không bao giờ block. Chưa biết (vừa khởi động) -> trả true:
      * cho request đi, offline thật thì request tự fail, thay vì đứng chờ hệ thống trên main thread.
@@ -59,10 +62,9 @@ object NetworkHelper {
 
     private fun ConnectivityManager.readNow(): Boolean {
         val network = activeNetwork ?: return false
-        return getNetworkCapabilities(network)?.isValidatedInternet() == true
+        return getNetworkCapabilities(network)?.hasInternet() == true
     }
 
-    private fun NetworkCapabilities.isValidatedInternet(): Boolean =
-        hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-            hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+    private fun NetworkCapabilities.hasInternet(): Boolean =
+        hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
 }

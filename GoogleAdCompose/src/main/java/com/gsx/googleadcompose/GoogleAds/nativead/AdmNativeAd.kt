@@ -2,17 +2,22 @@ package com.gsx.googleadcompose.GoogleAds.nativead
 
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.withStarted
 import com.google.android.libraries.ads.mobile.sdk.common.AdValue
 import com.google.android.libraries.ads.mobile.sdk.common.LoadAdError
 import com.google.android.libraries.ads.mobile.sdk.common.VideoOptions
@@ -21,11 +26,22 @@ import com.google.android.libraries.ads.mobile.sdk.nativead.NativeAdEventCallbac
 import com.google.android.libraries.ads.mobile.sdk.nativead.NativeAdLoader
 import com.google.android.libraries.ads.mobile.sdk.nativead.NativeAdLoaderCallback
 import com.google.android.libraries.ads.mobile.sdk.nativead.NativeAdRequest
+import com.gsx.googleadcompose.GoogleAds.AD_FALLBACK_DELAY_MS
 import com.gsx.googleadcompose.GoogleAds.AdCore
+import com.gsx.googleadcompose.GoogleAds.AdUnitChain
+import com.gsx.googleadcompose.GoogleAds.AdUnitCursor
+import com.gsx.googleadcompose.GoogleAds.AdmAdDiagnostics
+import com.gsx.googleadcompose.GoogleAds.AdmAdEvent
+import com.gsx.googleadcompose.GoogleAds.AdmAdEventType
+import com.gsx.googleadcompose.GoogleAds.AdmAdFormat
+import com.gsx.googleadcompose.GoogleAds.DEFAULT_MAX_FALLBACK_UNITS
+import com.gsx.googleadcompose.GoogleAds.adSourceName
+import com.gsx.googleadcompose.GoogleAds.allowsFallback
 import com.gsx.googleadcompose.data.AdmConfigAdId
 import com.gsx.googleadcompose.error.AdmErrorType
 import com.gsx.googleadcompose.helper.NetworkHelper
 import com.gsx.googleadcompose.utils.PreferencesManager
+import kotlinx.coroutines.delay
 
 /**
  * Native ad (GMA Next-Gen SDK) theo pattern Google git `NativeComposeFragment`:
@@ -76,6 +92,39 @@ class AdmNativeAd internal constructor() : NativeAdEventCallback {
     /** [NativeLayout.COLLAPSIBLE]: màu vòng tròn chạy quanh mũi tên trong lúc chờ [collapseDelaySeconds]. */
     var collapseRingColor: Color = Color.White
 
+    /** Số ID dự phòng thử thêm khi ID đang dùng không có ad (chỉ khi xoay vòng, `index = -1`). */
+    var maxFallbackUnits: Int = DEFAULT_MAX_FALLBACK_UNITS
+
+    /** true: mỗi lượt đều thử từ ID đầu list (khi list xếp floor cao -> thấp). false: xoay vòng. */
+    var startFromFirstUnit: Boolean = false
+
+    /**
+     * [AdmNative] tự load mà hụt: slot thử lại sau lần lượt các khoảng này, chỉ khi app đang hiện trên màn.
+     * Rỗng = không thử lại. Hết lượt mới báo [onError].
+     */
+    var retryDelaysMs: List<Long> = listOf(15_000L, 45_000L)
+
+    /** Còn lượt thử lại -> chưa báo lỗi cho app, app chưa ẩn slot. */
+    internal var holdRetryableErrors = false
+
+    /** Lỗi gần nhất bị giữ lại do [holdRetryableErrors]. */
+    internal var heldError: AdmErrorType? = null
+        private set
+
+    /**
+     * Áp cấu hình của composable, gọi mỗi lần recompose để nhận lambda mới. Gỡ hook cũ trước: app hay bọc hook
+     * (`val old = onPaid; onPaid = { old(it); ... }`), không gỡ thì mỗi lần recompose lại bọc thêm 1 lớp và
+     * 1 sự kiện bị xử lý nhiều lần.
+     */
+    internal fun applyConfig(configure: AdmNativeAd.() -> Unit) {
+        onError = {}
+        onLoaded = {}
+        onImpression = {}
+        onClicked = {}
+        onPaid = {}
+        configure()
+    }
+
     /** Kênh báo lỗi (xem [AdmErrorType]). */
     var onError: (AdmErrorType) -> Unit = {}
 
@@ -86,6 +135,8 @@ class AdmNativeAd internal constructor() : NativeAdEventCallback {
     var onClicked: () -> Unit = {}
     var onPaid: (AdValue) -> Unit = {}
 
+    /** Tăng mỗi lần destroy -> callback load đến sau khi đã rời màn tự huỷ ad, không đụng state cũ. */
+    private var generation = 0
     private var currentIndex: Int = -1
     private var unitId: String? = null
     private fun tag(): String = "[#$currentIndex ${unitId ?: "-"}]"
@@ -110,61 +161,124 @@ class AdmNativeAd internal constructor() : NativeAdEventCallback {
     fun load(index: Int = -1, onResult: (NativeAd?) -> Unit = {}) =
         loadIds(units(), index, onResult)
 
-    /** Load xoay vòng từ list id [ids] cho trước (vd customIds của [AdmNative]). [index]=-1 xoay vòng. */
+    /** Load xoay vòng từ list id [ids] cho trước (vd customIds của [AdmNative]). [index]=-1 xoay vòng + dự phòng. */
     internal fun loadIds(ids: List<String>, index: Int = -1, onResult: (NativeAd?) -> Unit = {}) {
         premiumBlock()?.let { fail(it); onResult(null); return }
         val u = ids.filter { it.isNotBlank() }
         if (u.isEmpty()) { fail(AdmErrorType.LIST_AD_ID_IS_EMPTY); onResult(null); return }
-        val idx = if (index < 0) nextIndex(u.size) else index
-        val unit = u.getOrNull(idx) ?: run { fail(AdmErrorType.AD_ID_IS_NOT_EXIST); onResult(null); return }
-        currentIndex = idx
-        loadUnit(unit, onResult)
+        val chain = AdUnitChain.build(u, index, maxFallbackUnits) { if (startFromFirstUnit) 0 else CURSOR.next(u.size) }
+        val first = chain?.next()
+        if (chain == null || first == null) { fail(AdmErrorType.AD_ID_IS_NOT_EXIST); onResult(null); return }
+        currentIndex = first.index
+        request(first.unitId, chain, attempt = 0, gen = generation, onResult)
     }
 
     /** Load native theo unit id cụ thể (không qua [AdmConfigAdId]). Dùng cho [AdmNativeSequence]. */
     fun loadUnit(unitId: String, onResult: (NativeAd?) -> Unit = {}) {
+        request(unitId, chain = null, attempt = 0, gen = generation, onResult)
+    }
+
+    private fun request(unit: String, chain: AdUnitChain?, attempt: Int, gen: Int, onResult: (NativeAd?) -> Unit) {
         envBlock()?.let { fail(it); onResult(null); return }
-        if (unitId.isBlank()) { fail(AdmErrorType.AD_ID_IS_NOT_EXIST); onResult(null); return }
-        this.unitId = unitId
-        log("loadUnit ${tag()}")
+        if (unit.isBlank()) { fail(AdmErrorType.AD_ID_IS_NOT_EXIST); onResult(null); return }
+        unitId = unit
+        val startedAt = SystemClock.elapsedRealtime()
+        log("loadUnit ${tag()}${if (attempt > 0) " [dự phòng $attempt]" else ""}")
+        report(AdmAdEventType.LOAD_REQUEST, attempt = attempt)
 
         val videoOptions = VideoOptions.Builder().setStartMuted(startMuted).build()
-        val request = NativeAdRequest.Builder(unitId, listOf(NativeAd.NativeAdType.NATIVE))
+        val request = NativeAdRequest.Builder(unit, listOf(NativeAd.NativeAdType.NATIVE))
             .setVideoOptions(videoOptions)
             .build()
 
-        NativeAdLoader.load(request, object : NativeAdLoaderCallback {
-            // Callback đến từ thread nền -> về main: onResult đổi Compose state / AdmNativeSequenceState.
-            override fun onNativeAdLoaded(ad: NativeAd) = AdCore.onMain {
-                log("loaded ${tag()}")
-                ad.adEventCallback = this@AdmNativeAd
-                nativeAd = ad
-                onLoaded(ad)
-                onResult(ad)
-            }
+        val result = runCatching {
+            NativeAdLoader.load(request, object : NativeAdLoaderCallback {
+                // Callback đến từ thread nền -> về main: onResult đổi Compose state / AdmNativeSequenceState.
+                override fun onNativeAdLoaded(ad: NativeAd) = AdCore.onMain {
+                    if (gen != generation) {                 // đã rời màn trong lúc load -> không ai nhận ad này
+                        runCatching { ad.destroy() }
+                        return@onMain
+                    }
+                    log("loaded ${tag()}")
+                    report(
+                        AdmAdEventType.LOAD_SUCCESS,
+                        attempt = attempt,
+                        latencyMs = SystemClock.elapsedRealtime() - startedAt,
+                        adSource = ad.getResponseInfo().adSourceName(),
+                    )
+                    ad.adEventCallback = this@AdmNativeAd
+                    val previous = nativeAd
+                    nativeAd = ad
+                    if (previous !== ad) runCatching { previous?.destroy() }   // load lại: ad cũ không được bỏ rơi
+                    onLoaded(ad)
+                    onResult(ad)
+                }
 
-            override fun onAdFailedToLoad(adError: LoadAdError) = AdCore.onMain {
-                log("load FAIL ${tag()}: ${adError.code} ${adError.message}")
-                fail(AdmErrorType.AD_IS_NOT_AVAILABLE)
-                onResult(null)
-            }
-        })
+                override fun onAdFailedToLoad(adError: LoadAdError) = AdCore.onMain {
+                    if (gen != generation) return@onMain
+                    log("load FAIL ${tag()}: ${adError.code} ${adError.message}")
+                    report(
+                        AdmAdEventType.LOAD_FAIL,
+                        attempt = attempt,
+                        errorCode = adError.code.name,
+                        errorMessage = adError.message,
+                        latencyMs = SystemClock.elapsedRealtime() - startedAt,
+                    )
+                    val next = chain?.takeIf { adError.code.allowsFallback() }?.next()
+                    if (next != null) {
+                        AdCore.postMain(AD_FALLBACK_DELAY_MS) {
+                            if (gen == generation) {
+                                currentIndex = next.index
+                                request(next.unitId, chain, attempt + 1, gen, onResult)
+                            }
+                        }
+                        return@onMain
+                    }
+                    fail(AdmErrorType.AD_IS_NOT_AVAILABLE)
+                    onResult(null)
+                }
+            })
+        }
+        result.exceptionOrNull()?.let { error ->
+            Log.w(TAG, "load exception ${tag()}", error)
+            fail(AdmErrorType.AD_IS_NOT_AVAILABLE)
+            onResult(null)
+        }
     }
 
-    /** Hủy ad (gọi khi rời màn). */
+    /** Nhận event của ad load từ nơi khác (preload/tuần tự): gắn đúng unit id để đo doanh thu theo từng ID. */
+    internal fun bindEvents(ad: NativeAd) {
+        unitId = runCatching { ad.adUnitId }.getOrNull() ?: unitId
+        ad.adEventCallback = this
+    }
+
+    /** Hủy ad (gọi khi rời màn). Load đang chạy về sau sẽ tự huỷ ad, không gọi onResult. */
     fun destroy() {
         log("destroy ${tag()}")
-        nativeAd?.destroy()
+        generation++
+        runCatching { nativeAd?.destroy() }
         nativeAd = null
     }
 
     // ============ NativeAdEventCallback (kế thừa AdEventCallback) ============
 
     // Event callback đến từ thread nền -> về main trước khi gọi hook app.
-    override fun onAdImpression() = AdCore.onMain { log("impression ${tag()}"); onImpression() }
-    override fun onAdClicked() = AdCore.onMain { log("clicked ${tag()}"); onClicked() }
+    override fun onAdImpression() = AdCore.onMain {
+        log("impression ${tag()}")
+        report(AdmAdEventType.IMPRESSION)
+        onImpression()
+    }
+
+    override fun onAdClicked() = AdCore.onMain {
+        log("clicked ${tag()}")
+        AdCore.noteAdClicked()
+        report(AdmAdEventType.CLICK)
+        onClicked()
+    }
+
     override fun onAdPaid(value: AdValue) = AdCore.onMain {
         log("paid ${tag()}: ${value.valueMicros} ${value.currencyCode}")
+        report(AdmAdEventType.PAID, valueMicros = value.valueMicros, currencyCode = value.currencyCode)
         onPaid(value)
     }
 
@@ -190,15 +304,46 @@ class AdmNativeAd internal constructor() : NativeAdEventCallback {
 
     private fun units(): List<String> = AdmConfigAdId.listNativeAdUnitID.filter { it.isNotBlank() }
 
-    private fun nextIndex(size: Int): Int {
-        val i = cursor % size
-        cursor = (cursor + 1) % size
-        return i
-    }
-
     private fun fail(type: AdmErrorType) {
         log("ERROR: $type")
+        report(AdmAdEventType.ERROR, errorCode = type.name)
+        if (holdRetryableErrors && type in RETRYABLE_ERRORS) {
+            heldError = type
+            return
+        }
         onError(type)
+    }
+
+    /** SDK chưa sẵn sàng quá lâu / consent không cho phép: báo app, slot vẫn tự load nếu SDK sẵn sàng sau đó. */
+    internal fun notifyAdsNotReady() {
+        holdRetryableErrors = false
+        fail(AdmErrorType.UMP_IS_NOT_ACTIVE)
+    }
+
+    private fun report(
+        type: AdmAdEventType,
+        attempt: Int? = null,
+        errorCode: String? = null,
+        errorMessage: String? = null,
+        latencyMs: Long? = null,
+        adSource: String? = null,
+        valueMicros: Long? = null,
+        currencyCode: String? = null,
+    ) {
+        AdmAdDiagnostics.report(
+            AdmAdEvent(
+                format = AdmAdFormat.NATIVE,
+                type = type,
+                adUnitId = unitId,
+                errorCode = errorCode,
+                errorMessage = errorMessage,
+                latencyMs = latencyMs,
+                adSource = adSource,
+                attempt = attempt,
+                valueMicros = valueMicros,
+                currencyCode = currencyCode,
+            )
+        )
     }
 
     private fun log(msg: String) {
@@ -207,7 +352,21 @@ class AdmNativeAd internal constructor() : NativeAdEventCallback {
 
     companion object {
         private const val TAG = "GoogleAds/Native"
-        private var cursor = 0
+        private val CURSOR = AdUnitCursor()
+
+        /** Lỗi có thể hết sau một lúc: đáng để slot thử lại. Premium / sai ID thì không. */
+        private val RETRYABLE_ERRORS = setOf(
+            AdmErrorType.AD_IS_NOT_AVAILABLE,
+            AdmErrorType.NETWORK_IS_NOT_AVAILABLE,
+            AdmErrorType.UMP_IS_NOT_ACTIVE,
+        )
+
+        /** True nếu lúc này gửi được request (không premium, SDK đã init, có mạng). */
+        internal fun canRequestNow(): Boolean {
+            if (isPremiumBlocked() || !AdCore.isMobileAdsReady) return false
+            val ctx = AdCore.appContext
+            return ctx == null || NetworkHelper.isOnline(ctx)
+        }
 
         /** True khi premium (removeAds/lifetime/sub) -> không hiện native (kể cả shimmer). */
         fun isPremiumBlocked(): Boolean {
@@ -262,6 +421,9 @@ object AdmNativeSequenceState {
     private var loading: Boolean = false
     private val handler = Handler(Looper.getMainLooper())
 
+    /** Tăng khi init/release -> ad load xong muộn sau đó tự huỷ, không rơi vào buffer không ai dọn. */
+    private var generation = 0
+
     /** Ad sẵn cho lần [consume] kế (state -> Compose observe được). */
     var ready by mutableStateOf<NativeAd?>(null)
         private set
@@ -293,6 +455,7 @@ object AdmNativeSequenceState {
         val all = AdmConfigAdId.listNativeAdUnitID
         ids = indices.mapNotNull { all.getOrNull(it)?.takeIf { s -> s.isNotBlank() } }
         pos = 0
+        generation++
         handler.removeCallbacksAndMessages(null)
         ready?.destroy()
         ready = null
@@ -316,10 +479,22 @@ object AdmNativeSequenceState {
         // Timeout: CHỈ mở nút đi tiếp (nav). View vẫn chờ ad thật (resolved) -> load xong là hiện.
         handler.postDelayed({ isNextReady = true }, timeoutMs)
         val id = ids[pos]
+        val gen = generation
         Log.d(TAG, "preload pos=$pos $id")
         AdmNativeAd.preloadUnit(id) { ad ->
+            if (gen != generation) {                           // đã init lại / release trong lúc load
+                runCatching { ad?.destroy() }
+                return@preloadUnit
+            }
             loading = false
             handler.removeCallbacksAndMessages(null)
+            // ID này không có ad nhưng vẫn request được -> thử ID kế cho slot hiện tại, trang không bị trống.
+            if (ad == null && pos + 1 < ids.size && AdmNativeAd.canRequestNow()) {
+                Log.w(TAG, "preload FAIL pos=$pos -> thử id kế")
+                pos += 1
+                preloadNext()
+                return@preloadUnit
+            }
             ready = ad                                         // null nếu fail -> slot rỗng
             resolved = true                                    // load XONG thật (sẵn/fail) -> view consume
             isNextReady = true
@@ -347,6 +522,7 @@ object AdmNativeSequenceState {
      * preload. Tránh leak ad không view nào lấy. Ad đã consume (view đang show) do view tự destroy.
      */
     fun release() {
+        generation++
         handler.removeCallbacksAndMessages(null)
         ready?.destroy()
         ready = null
@@ -399,14 +575,19 @@ fun AdmNativeSequence(
     }
 }
 
+/** Chờ SDK init tối đa ngần này thì thôi shimmer + báo app. SDK sẵn sàng sau đó, slot vẫn tự load. */
+private const val ADS_READY_WAIT_MS = 12_000L
+
 /**
  * Compose native — 2 chế độ tách bằng [index]:
- * - Truyền [nativeAd] (preload) -> show ngay, KHÔNG tự load/destroy (app sở hữu ad).
+ * - Truyền [nativeAd] (preload) -> show ngay, KHÔNG tự load. App sở hữu ad: tự destroy, hoặc truyền
+ *   [destroyNativeAdOnDispose] = true để ad được huỷ khi rời màn (mỗi ad giữ 1 WebView, quên huỷ là tốn bộ nhớ).
  * - [index] != null (và không có [nativeAd]) -> TỰ load slot đó (-1 xoay vòng, >=0 cụ thể), shimmer
  *   lúc chờ, tự destroy khi rời màn.
  * - [index] == null + [nativeAd] == null -> SKIP (render rỗng). Dùng cho preload đang chờ.
  *
- * Premium/offline/UMP chưa sẵn -> render rỗng (báo qua [configure].onError).
+ * Slot tự load không bỏ cuộc ngay: SDK chưa init xong thì chờ; hết ad / mất mạng thì thử lại theo
+ * [AdmNativeAd.retryDelaysMs] khi app đang hiện. Hết lượt mới báo onError. Premium -> render rỗng.
  *
  * ```
  * AdmNative(Modifier.fillMaxWidth(), nativeAd = cache["home"])      // preload -> show, null -> skip
@@ -420,35 +601,71 @@ fun AdmNative(
     nativeAd: NativeAd? = null,
     index: Int? = null,
     customIds: List<String>? = null,
+    destroyNativeAdOnDispose: Boolean = false,
     configure: AdmNativeAd.() -> Unit = {},
 ) {
     val controller = remember { AdmNativeAd() }
-    controller.apply(configure)
+    controller.applyConfig(configure)
     val blocked = remember { controller.isBlockedByPremium() }
     val isPreview = LocalInspectionMode.current
 
     var selfAd by remember { mutableStateOf<NativeAd?>(null) }
+    var selfAdSlot by remember { mutableStateOf<Any?>(null) }
     var failed by remember { mutableStateOf(false) }
+    val slot = remember(index, customIds) { Any() }
+    var attempt by remember(slot) { mutableIntStateOf(0) }
     val wantSelf = index != null || customIds != null   // customIds truyền -> xoay vòng list đó
+    val adsReady = isPreview || AdCore.isMobileAdsReady   // snapshot state: SDK init xong -> effect tự chạy lại
+    val adsUnavailable = AdCore.adsUnavailable
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
 
     // Tự load CHỈ khi: không có ad preload + có yêu cầu self-load ([index] != null).
-    LaunchedEffect(nativeAd, index, customIds, blocked) {
+    LaunchedEffect(nativeAd, slot, blocked, adsReady, adsUnavailable, attempt) {
         if (isPreview) return@LaunchedEffect
         if (blocked) {
             // Premium/removeAds -> báo error (không im lặng), rồi render rỗng.
             controller.onError(controller.premiumBlockError() ?: AdmErrorType.CLIENT_HAVE_BEEN_REMOVED_AD)
             return@LaunchedEffect
         }
-        if (nativeAd != null || !wantSelf) return@LaunchedEffect
-        val cb: (NativeAd?) -> Unit = { result -> selfAd = result; failed = result == null }
+        if (nativeAd != null || !wantSelf || (selfAd != null && selfAdSlot === slot)) return@LaunchedEffect
+        if (!adsReady) {
+            // SDK chưa init xong: chờ thay vì coi là hỏng, adsReady đổi thì effect này chạy lại và load.
+            if (!adsUnavailable) delay(ADS_READY_WAIT_MS)
+            if (!failed) {
+                failed = true
+                controller.notifyAdsNotReady()
+            }
+            return@LaunchedEffect
+        }
+        controller.holdRetryableErrors = attempt < controller.retryDelaysMs.size
+        val cb: (NativeAd?) -> Unit = { result ->
+            selfAd = result
+            selfAdSlot = slot
+            failed = result == null
+        }
         if (customIds != null) controller.loadIds(customIds, index ?: -1, cb)   // xoay vòng list truyền
         else controller.load(index ?: -1, cb)
     }
-    // Chỉ destroy ad TỰ load (controller.nativeAd); ad preload do app sở hữu -> không đụng.
-    DisposableEffect(Unit) { onDispose { controller.destroy() } }
+    // Slot đang trống trên màn: thử lại theo lịch. App ở nền thì chờ quay lại, không request khi user không thấy.
+    LaunchedEffect(failed, attempt, adsReady) {
+        if (!failed || !adsReady || isPreview || blocked || !wantSelf || nativeAd != null) return@LaunchedEffect
+        val wait = controller.retryDelaysMs.getOrNull(attempt) ?: return@LaunchedEffect
+        delay(wait)
+        lifecycle.withStarted { }
+        attempt += 1
+    }
+    // Ad TỰ load luôn được destroy; ad preload do app sở hữu -> chỉ destroy khi app yêu cầu.
+    val currentNativeAd by rememberUpdatedState(nativeAd)
+    val currentDestroyOnDispose by rememberUpdatedState(destroyNativeAdOnDispose)
+    DisposableEffect(Unit) {
+        onDispose {
+            controller.destroy()
+            if (currentDestroyOnDispose) runCatching { currentNativeAd?.destroy() }
+        }
+    }
 
     val shown = nativeAd ?: selfAd
-    LaunchedEffect(shown) { shown?.adEventCallback = controller }   // gắn impression/click/paid
+    LaunchedEffect(shown) { shown?.let(controller::bindEvents) }   // gắn impression/click/paid
 
     when {
         blocked -> Unit

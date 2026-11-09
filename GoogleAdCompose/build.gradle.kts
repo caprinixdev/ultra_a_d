@@ -68,4 +68,5 @@ dependencies {
     implementation(libs.play.app.review)
     implementation(libs.play.app.review.ktx)
     api(libs.billing.ktx)
+    testImplementation(libs.junit)
 }

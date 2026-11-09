@@ -18,6 +18,7 @@ class GoogleAdsComposeStartUp : ContentProvider() {
         context?.applicationContext?.let {
             Prefs.init(it)
             com.gsx.googleadcompose.helper.NetworkHelper.start(it)   // theo dõi mạng trên thread nền, sẵn trước lần load ad đầu
+            com.gsx.googleadcompose.helper.AdmDevice.start(it)       // đọc cấu hình máy trên thread nền
             com.gsx.googleadcompose.GoogleAds.AdCore.appContext = it
             (it as? android.app.Application)?.let { app ->
                 com.gsx.googleadcompose.GoogleAds.AdCore.registerActivityTracking(app)
