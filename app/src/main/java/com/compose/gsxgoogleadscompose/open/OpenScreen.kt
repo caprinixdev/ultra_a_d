@@ -31,7 +31,6 @@ fun OpenScreen() {
 
     val open = AdmOpen {
         onAvailable = { status = "Ad sẵn sàng ✅" }
-        onExhausted = { status = "Hết ad (exhausted)" }
         onShowed = { status = "Đang show" }
         onClicked = { status = "User bấm ad" }
         onDismissed = { status = "Ad đóng" }

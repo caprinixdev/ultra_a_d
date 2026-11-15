@@ -151,7 +151,7 @@ if (ump.isPrivacyOptionsRequired) {
 
 ## 3. App Open ad
 
-Dùng `AppOpenAdPreloader`: preload buffer, show bằng `pollAd`, không dialog loading. SDK tự nạp tiếp, tự retry khi lỗi và tự làm mới ad sắp hết hạn. Splash và resume dùng chung 1 unit id thì dùng chung buffer. Hai cách dùng:
+Nạp từng ad một (`AppOpenAd.load`), giữ tối đa 1 ad, show 1 lần rồi bỏ, không dialog loading. Show xong **không nạp bù**: từ 1.0.26 bỏ `AppOpenAdPreloader`, vì preloader tự nạp lại sau mỗi lần show (ad nạp sau splash bị vứt khi màn splash huỷ instance) và nạp ngay lúc bật resume, làm show rate App Open tụt. Ad giữ quá `adTtlMs` (mặc định 3 giờ 55 phút) thì bỏ. Hai cách dùng:
 
 ### 3.1 Resume — tự show khi app trở lại foreground
 
@@ -169,7 +169,7 @@ class App : Application() {
 }
 ```
 
-Mobile Ads sẵn là preload ngay, nên lần quay lại đầu tiên đã có ad. Mỗi resume kiểm tra `GlobalVariables.canShowOpenAd` + `isShowPopup` (mutex full-screen).
+Ad được nạp lúc app **xuống nền** (ON_STOP), nên lúc người dùng quay lại (ON_START) là có ad; quay lại nhanh quá chưa nạp kịp thì bỏ lần đó, không show trễ (ad về sau giữ cho lần quay lại kế). Không nạp ngay lúc bật, không nạp bù sau khi show. Lúc xuống nền và lúc quay lại đều kiểm tra `GlobalVariables.canShowOpenAd`; lúc show kiểm tra thêm `isShowPopup` (mutex full-screen).
 
 Tuỳ chỉnh: `minResumeIntervalMs` (khoảng cách tối thiểu giữa 2 lần show, mặc định 0) · `skipResumeAfterAdClick` (user rời app do bấm ad thì lúc quay lại không show thêm, mặc định `true`).
 
@@ -245,6 +245,8 @@ AdmNative(Modifier.fillMaxWidth(), nativeAd = cache["home"])   // null -> skip
 
 > Ad preload do **app sở hữu** → tự gọi `ad.destroy()` khi xong, hoặc truyền `destroyNativeAdOnDispose = true` để ad được huỷ khi rời màn. Mỗi native giữ 1 WebView, quên huỷ sẽ tốn bộ nhớ dần theo số lần vào màn.
 
+> **Chỉ preload cho lần show chắc chắn tới.** Ad nạp mà không hiện vẫn tính là matched request, kéo show rate xuống (Mesh: mỗi chỗ đặt tự nạp sẵn 1 cái "cho lần sau" -> native 52–62%). Đừng nạp sẵn "cho lần sau" ở mọi chỗ đặt; nếu cần, giữ **một** ad dự phòng chung cho cả app và chỉ nạp cho màn người dùng hay quay lại. Ad giữ quá ~1 giờ thì bỏ (hết hạn, hiện ra không được tính).
+
 ### 4.3 Native tuần tự (onboarding nhiều trang)
 
 Preload theo thứ tự, luôn giữ sẵn 1 ad cho lần show kế:
@@ -273,14 +275,17 @@ Media phủ trên, card tối đè đáy (icon + tên + badge Ad, body, nút CTA
 val storyAds = remember { mutableStateListOf<NativeAd?>(null, null) }
 var withNativeFull by remember { mutableStateOf(false) }   // true -> đóng inter hiện native full
 var showStory by remember { mutableStateOf(false) }
-val inter = AdmInterstitial { onDismissed = { if (withNativeFull) showStory = true } }
+val inter = AdmSharedInterstitial.get().apply {
+    // nạp 2 native LÚC INTER VỪA HIỆN — inter đứng trên màn vài giây, thừa thời gian cho native về
+    onShowed = { if (withNativeFull) storyAds.indices.forEach { i -> AdmNativeAd.preload { storyAds[i] = it } } }
+}
 
-// load inter + preload 2 native cùng lúc
-inter.load()
-storyAds.indices.forEach { i -> AdmNativeAd.preload { storyAds[i] = it } }
+inter.show { shown -> if (shown && withNativeFull) showStory = true else goNext() }
 
 if (showStory) AdmNativeFullStory(nativeAds = storyAds, onClose = { showStory = false /* + destroy ads */ })
 ```
+
+> Đừng preload native story cùng lúc `inter.load()`: inter nạp mà không bao giờ hiện thì 2 native đi kèm cũng bị vứt — mỗi lần là thêm matched request không có lượt hiện.
 
 `nativeAds = null` → tự load `pages` ad và tự destroy. Ad của trang null → mượn ad khác trong list; không có ad nào → báo `onError` đúng 1 lần rồi `onClose`. Vì cả hai đều được gọi, nếu đóng màn trong cả hai thì phải có chốt để chỉ đóng 1 lần.
 
@@ -322,7 +327,41 @@ AdmBanner(Modifier.fillMaxWidth()) {                     // tuỳ biến
 
 ## 6. Interstitial ad
 
-One-shot `InterstitialAd.load`: load đúng 1 ad giữ sẵn, show 1 lần rồi bỏ (không tự refill). `load` gọi sớm; `show` khi ad sẵn thì hiện dialog ngắn rồi show, chưa kịp load thì dialog chờ load xong tự show (quá timeout hoặc bấm Back → `onError`). Cần show lại → gọi `load`/`show` lần nữa.
+One-shot `InterstitialAd.load`: load đúng 1 ad giữ sẵn, show 1 lần rồi bỏ (không tự refill). `show` khi ad sẵn thì hiện dialog ngắn rồi show, chưa kịp load thì dialog chờ load xong tự show (quá timeout hoặc bấm Back → báo lỗi). Cần show lại → `load`/`show` lần nữa.
+
+> **Show rate = lượt hiện ÷ ad nạp được.** Ad nạp mà không hiện (rời màn, lượt chưa tới hạn) kéo show rate xuống và mạng quảng cáo có thể hạ giá. Từ 1.0.22 bản này bỏ `countToShowAds` (bản 1.0.20 chỉ nạp khi tới lượt hiện) và README cũ hướng dẫn mỗi màn tự tạo inter rồi `load()` lúc vào màn — app làm theo thì show rate inter chỉ còn 17–40%. Dùng **6.1**.
+
+### 6.1 Inter dùng chung + đếm lượt (khuyên dùng)
+
+`AdmSharedInterstitial` — một instance sống suốt process, không chết theo màn: ad nạp ở màn này hiện ở màn khác, cả phiên phí nhiều nhất 1 ad. Đếm lượt như `countToShowAds` bản 1.0.20 (lưu qua các lần mở app).
+
+```kotlin
+val inter = AdmSharedInterstitial.get()      // 1 cái cho cả app; gọi ở đâu cũng ra cùng instance
+
+// hook cả app, gắn 1 lần (vd Application / MainActivity)
+inter.onPaid = { v -> track(v) }
+inter.onLoadFailed = { type -> log(type) }
+
+// --- Hiện theo lượt: lượt 1, 3, 5... (startAds = 1, loopAds = 2) ---
+// vào màn có nút: chỉ nạp khi lượt bấm KẾ TIẾP sẽ hiện ad
+LaunchedEffect(Unit) { inter.preloadIfDue("inter_editor_back", startAds = 1, loopAds = 2) }
+// bấm: đếm lượt, tới hạn thì hiện; onDone luôn được gọi đúng 1 lần
+BackHandler { inter.countToShow(keyCounterAd = "inter_editor_back", startAds = 1, loopAds = 2) { shown -> goBack() } }
+
+// --- Lần nào cũng hiện ---
+LaunchedEffect(Unit) { inter.load() }                       // đã có / đang nạp -> bỏ qua
+Button(onClick = { inter.show { shown -> goNext() } }) { Text("Xong") }
+```
+
+- `onDone(shown)` được gọi **đúng 1 lần**, trên main, kể cả khi không hiện (premium, chưa có ad, full-screen khác đang hiện, đang có lượt khác) → **luôn đi tiếp trong `onDone`**.
+- Hook cả app: `onAvailable` · `onLoadFailed` · `onShowed` · `onImpression` · `onClicked` · `onPaid`. Đừng gán hook của `inter.ad`.
+- Tuỳ chỉnh qua `inter.ad` (bảng dưới), vd `inter.ad.waitWhenNotReady = false`.
+- Placement phải dùng unit riêng → instance riêng: `AdmSharedInterstitial.get("splash")` + `index`.
+- User vừa mua premium → `AdmSharedInterstitial.clearAll()` bỏ ad đang giữ.
+
+### 6.2 Inter riêng cho một màn
+
+`AdmInterstitial { }` tạo instance theo màn, **rời màn là huỷ cả ad đã nạp**. Chỉ dùng khi màn đó chắc chắn hiện ad mỗi lần vào (vd splash chờ ad rồi hiện ngay); inter ở nhiều màn hay hiện theo lượt → 6.1.
 
 ```kotlin
 val inter = AdmInterstitial {        // helper -> AdmInterstitialAd, tự destroy khi rời màn
@@ -330,35 +369,33 @@ val inter = AdmInterstitial {        // helper -> AdmInterstitialAd, tự destro
     onDismissed = { goNext() }        // ad đóng -> đi tiếp
 }
 
-LaunchedEffect(Unit) { inter.load() }    // bật preload sớm
-
-Button(onClick = { inter.show() }) { Text("Show") }   // tự lấy activity foreground
+Button(onClick = { inter.show() }) { Text("Show") }   // chưa nạp -> dialog chờ nạp rồi hiện
 ```
 
-Tuỳ chỉnh:
+Tuỳ chỉnh (cả `AdmInterstitial` lẫn `AdmSharedInterstitial.ad`):
 
 | Thuộc tính | Mặc định | Ý nghĩa |
 |---|---|---|
 | `loadingText` | `"Loading..."` | Chữ trên dialog |
 | `loadTimeoutMs` | 8s | Ad chưa sẵn thì chờ tối đa ngần này |
 | `showDelayMs` | 2s | Dialog trước khi show ad đã sẵn |
-| `waitWhenNotReady` | `true` | `false` → ad chưa sẵn thì `onError` ngay, không bắt user chờ, ad load tiếp cho lần sau. Nên dùng cho placement không quan trọng |
+| `waitWhenNotReady` | `true` | `false` → ad chưa sẵn thì báo lỗi ngay, không bắt user chờ, ad load tiếp cho lần sau. Nên dùng cho placement không quan trọng |
 | `maxFallbackUnits` | 2 | Số ID dự phòng khi không có ad |
 | `failCooldownMs` | 15s | Vừa load hụt thì trong ngần này không request lại, `show` báo lỗi ngay |
 | `adTtlMs` | 55 phút | Ad giữ quá lâu thì bỏ, load cái mới |
 
-Hook: `onAvailable` / `onShowed` / `onImpression` / `onClicked` / `onPaid` / `onDismissed` / `onComplete` / `onError`.
+Hook: `onAvailable` / `onLoadFailed` / `onShowed` / `onImpression` / `onClicked` / `onPaid` / `onDismissed` / `onComplete` / `onError`. `onLoadFailed` báo mọi lượt nạp hỏng, kể cả lúc không ai chờ show; `onError` chỉ báo lỗi nạp khi đang có show chờ.
 
 > Mutex `GlobalVariables.isShowPopup` chặn 2 full-screen đè nhau. Double-tap show → bỏ qua. Ad full-screen khác đang hiện → `onError(AD_IS_EXISTED)`. App xuống nền trước lúc show → giữ ad, `onError(ACTIVITY_IS_NOT_AVAILABLE)`. **Luôn đi tiếp trong cả `onDismissed` lẫn `onError`**, không thì màn sẽ đứng.
 
-### 6.1 Hai kiểu show inter
+### 6.3 Hai kiểu show inter
 
 1. **Inter thường** — đóng inter là đi tiếp.
-2. **Inter + native full** — đóng inter → hiện [native full 2 thanh loading](#44-native-full-sau-inter-2-thanh-loading).
+2. **Inter + native full** — đóng inter → hiện [native full 2 thanh loading](#44-native-full-sau-inter-2-thanh-loading). Native nạp trong `onShowed` của inter.
 
 ```kotlin
-Button(onClick = { withNativeFull = false; inter.show() }) { Text("Inter thường") }
-Button(onClick = { withNativeFull = true; inter.show() }) { Text("Inter + native full") }
+Button(onClick = { withNativeFull = false; inter.show { goNext() } }) { Text("Inter thường") }
+Button(onClick = { withNativeFull = true; inter.show { shown -> if (shown) showStory = true else goNext() } }) { Text("Inter + native full") }
 ```
 
 Demo đầy đủ: `app/.../interstitial/InterstitialScreen.kt`.

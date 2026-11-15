@@ -10,13 +10,11 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.google.android.libraries.ads.mobile.sdk.appopen.AppOpenAd
 import com.google.android.libraries.ads.mobile.sdk.appopen.AppOpenAdEventCallback
-import com.google.android.libraries.ads.mobile.sdk.appopen.AppOpenAdPreloader
+import com.google.android.libraries.ads.mobile.sdk.common.AdLoadCallback
 import com.google.android.libraries.ads.mobile.sdk.common.AdRequest
 import com.google.android.libraries.ads.mobile.sdk.common.AdValue
 import com.google.android.libraries.ads.mobile.sdk.common.FullScreenContentError
 import com.google.android.libraries.ads.mobile.sdk.common.LoadAdError
-import com.google.android.libraries.ads.mobile.sdk.common.PreloadCallback
-import com.google.android.libraries.ads.mobile.sdk.common.PreloadConfiguration
 import com.google.android.libraries.ads.mobile.sdk.common.ResponseInfo
 import com.gsx.googleadcompose.GlobalVariables
 import com.gsx.googleadcompose.data.AdmConfigAdId
@@ -25,75 +23,31 @@ import com.gsx.googleadcompose.helper.NetworkHelper
 import com.gsx.googleadcompose.utils.PreferencesManager
 
 /**
- * Buffer preload của SDK là toàn cục theo preload ID (= unit id), mà nhiều [AdmOpenAd] có thể cùng dùng 1 unit
- * (splash + resume + màn test). Hub này đếm người dùng: instance này rời màn không được huỷ buffer của
- * instance khác, và mọi instance đều nhận callback. Chỉ đụng trên main.
- */
-private object AppOpenPreloadHub {
-    private val listeners = HashMap<String, LinkedHashSet<PreloadCallback>>()
-
-    private val sdkCallback = object : PreloadCallback {
-        // SDK cấm gọi pollAd/start/destroy trong callback preload -> luôn post sang lượt sau của main.
-        override fun onAdPreloaded(preloadId: String, responseInfo: ResponseInfo) = dispatch(preloadId) {
-            it.onAdPreloaded(preloadId, responseInfo)
-        }
-
-        override fun onAdsExhausted(preloadId: String) = dispatch(preloadId) {
-            it.onAdsExhausted(preloadId)
-        }
-
-        override fun onAdFailedToPreload(preloadId: String, adError: LoadAdError) = dispatch(preloadId) {
-            it.onAdFailedToPreload(preloadId, adError)
-        }
-    }
-
-    private fun dispatch(preloadId: String, block: (PreloadCallback) -> Unit) = AdCore.postMain {
-        listeners[preloadId]?.toList()?.forEach(block)
-    }
-
-    /** Trả false nếu SDK không nhận preload. */
-    fun acquire(unit: String, config: PreloadConfiguration, listener: PreloadCallback): Boolean {
-        val existing = listeners[unit]
-        if (existing != null) {
-            existing += listener
-            return true
-        }
-        listeners[unit] = linkedSetOf(listener)
-        val started = runCatching { AppOpenAdPreloader.start(unit, config, sdkCallback) }
-            .onFailure { Log.w("GoogleAds/Open", "preload start lỗi", it) }
-            .getOrDefault(false)
-        if (!started) listeners.remove(unit)
-        return started
-    }
-
-    fun release(unit: String, listener: PreloadCallback) {
-        val set = listeners[unit] ?: return
-        set -= listener
-        if (set.isEmpty()) {
-            listeners.remove(unit)
-            runCatching { AppOpenAdPreloader.destroy(unit) }
-        }
-    }
-}
-
-/**
- * App Open ad (GMA Next-Gen SDK) — **[AppOpenAdPreloader]**: preload buffer, show bằng `pollAd`, SDK tự
- * nạp tiếp, tự retry khi lỗi, tự làm mới ad sắp hết hạn. Log tag `GoogleAds/Open`. KHÔNG dialog loading.
+ * App Open ad (GMA Next-Gen SDK) — nạp TỪNG AD MỘT bằng `AppOpenAd.load`, giữ tối đa 1 ad, show 1 lần rồi bỏ.
+ * Log tag `GoogleAds/Open`. KHÔNG dialog loading.
  *
- * `load`/`show` private (nội bộ). 2 cách dùng công khai:
- * - [resumeAd] — tự show khi app trở lại foreground (gọi 1 lần, vd Application qua [AdmOpenResume]).
- * - [showFromSplash] — load + show ngay cho cold-start trên splash.
+ * Bản 1.0.22–1.0.25 dùng `AppOpenAdPreloader`: preloader tự nạp lại ngay sau mỗi lần show và tự làm mới ad sắp
+ * hết hạn, nên app nạp những ad không bao giờ hiện — AdMob đếm là matched request không có impression:
+ * - splash show xong, preloader nạp tiếp 1 ad, rồi màn splash huỷ instance -> ad đó bị vứt, MỖI lần mở app;
+ * - resume vừa bật là nạp ngay, show xong lại nạp bù -> người dùng không rời app thêm lần nào thì vứt.
+ * Show rate App Open tụt còn khoảng 20–27%. Giờ:
+ * - [resumeAd]: nạp lúc app XUỐNG NỀN (ON_STOP), người dùng quay lại (ON_START) là có ad để show; chưa nạp kịp thì
+ *   bỏ lần này, không show trễ (ad về sau vẫn giữ cho lần quay lại kế). Show xong KHÔNG nạp bù.
+ * - [showFromSplash]: nạp + show cho cold start; show xong KHÔNG nạp bù.
  *
- * Cả hai nhận [index]: -1 xoay vòng, >=0 chọn id cụ thể trong [AdmConfigAdId.listOpenAdUnitID].
- * Mọi sự kiện vẫn trả qua hook ([onShowed]/[onDismissed]/[onError]/[onPaid]/...).
+ * `load`/`show` private (nội bộ). Cả hai cách dùng nhận [index]: -1 xoay vòng (lỗi thì thử ID dự phòng),
+ * >=0 chọn id cụ thể trong [AdmConfigAdId.listOpenAdUnitID]. Mọi sự kiện trả qua hook ([onShowed]/[onDismissed]/
+ * [onError]/[onPaid]/...).
  */
 class AdmOpenAd internal constructor() : AppOpenAdEventCallback {
 
     var enableLogging: Boolean = true
-    /** Số ad giữ sẵn trong buffer (mặc định SDK = 1). */
+
+    /** Không còn tác dụng: App Open giữ tối đa 1 ad. Giữ lại để code cũ vẫn biên dịch. */
+    @Deprecated("App Open nạp từng ad một (không còn preloader); giá trị này bị bỏ qua.")
     var bufferSize: Int = 1
 
-    /** Splash: số ID dự phòng thử thêm khi ID đang dùng không có ad (chỉ khi xoay vòng, `index = -1`). */
+    /** Số ID dự phòng thử thêm khi ID đang dùng không có ad (chỉ khi xoay vòng, `index = -1`). */
     var maxFallbackUnits: Int = DEFAULT_MAX_FALLBACK_UNITS
 
     /** Resume: khoảng cách tối thiểu giữa 2 lần show. `0` (mặc định) = không giới hạn. */
@@ -102,12 +56,18 @@ class AdmOpenAd internal constructor() : AppOpenAdEventCallback {
     /** Resume: user rời app do bấm ad thì lúc quay lại không show thêm app-open. */
     var skipResumeAfterAdClick: Boolean = true
 
+    /** Ad giữ quá ngần này thì bỏ (Google: App Open hết hạn sau 4 giờ). */
+    var adTtlMs: Long = 4L * 60 * 60 * 1000 - 5L * 60 * 1000
+
     /** Kênh báo lỗi duy nhất (xem [AdmErrorType]). */
     var onError: (AdmErrorType) -> Unit = {}
 
     // ---- Hook sự kiện cho app ----
-    /** Buffer có ad sẵn (preload xong) -> trả [ResponseInfo] (ad object poll lúc show). */
+    /** Ad nạp xong, sẵn để show -> trả [ResponseInfo]. */
     var onAvailable: (ResponseInfo) -> Unit = {}
+
+    /** Không còn được gọi (chỉ preloader cũ mới báo hết buffer). Giữ lại để code cũ vẫn biên dịch. */
+    @Deprecated("Không còn preloader nên không còn sự kiện hết buffer.")
     var onExhausted: () -> Unit = {}
     var onShowed: () -> Unit = {}
     var onImpression: () -> Unit = {}
@@ -118,23 +78,27 @@ class AdmOpenAd internal constructor() : AppOpenAdEventCallback {
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    /** Unit id đang preload. */
-    private var preloadUnitId: String? = null
+    /** Ad đã nạp, chờ show (null = chưa có). */
+    private var loadedAd: AppOpenAd? = null
+    private var loadedAtMs = 0L
+    private var loading = false
+
+    /** Tăng mỗi lần destroy -> callback nạp đến muộn không đụng state cũ + tự huỷ ad. */
+    private var generation = 0
+
+    private var currentUnit: String? = null
     private var currentIndex: Int = -1
-    private var chain: AdUnitChain? = null
-    private var chainAttempt = 0
-    private var requestStartedAtMs = 0L
-    private var preloadFailNotified = false
-    private fun tag(): String = "[#$currentIndex ${preloadUnitId ?: "-"}]"
+    private var loadFailNotified = false
+    private fun tag(): String = "[#$currentIndex ${currentUnit ?: "-"}]"
 
     private var popupOwned = false   // instance này đang giữ mutex isShowPopup
 
-    /** Ad đã poll để show: giữ để destroy sau khi đóng. */
+    /** Ad đã lấy ra để show: giữ để destroy sau khi đóng. */
     private var showingAd: AppOpenAd? = null
     private var showWatchdog: Runnable? = null
     private var lastShowedAtMs = 0L
 
-    // ---- Chờ preload để show (load+show) ----
+    // ---- Chờ nạp để show (splash) ----
     private var wantShow = false
     private var wantIndex = -1
     private var wantCustomIds: List<String>? = null
@@ -148,91 +112,47 @@ class AdmOpenAd internal constructor() : AppOpenAdEventCallback {
     private var skipNextStart = false
     private var leftAppByAdClick = false
 
-    private val preloadListener = object : PreloadCallback {
-        override fun onAdPreloaded(preloadId: String, responseInfo: ResponseInfo) {
-            if (preloadId != preloadUnitId) return
-            preloadFailNotified = false
-            log("preloaded ${tag()}")
-            report(
-                AdmAdEventType.LOAD_SUCCESS,
-                attempt = chainAttempt,
-                latencyMs = SystemClock.elapsedRealtime() - requestStartedAtMs,
-                adSource = responseInfo.adSourceName(),
-            )
-            onAvailable(responseInfo)
-            if (wantShow) {
-                wantShow = false
-                show(wantIndex, customIds = wantCustomIds)
-            }
-        }
-
-        override fun onAdsExhausted(preloadId: String) {
-            if (preloadId == preloadUnitId) onExhausted()
-        }
-
-        override fun onAdFailedToPreload(preloadId: String, adError: LoadAdError) {
-            if (preloadId != preloadUnitId) return
-            log("preload FAIL ${tag()}: ${adError.code} ${adError.message}")
-            report(
-                AdmAdEventType.LOAD_FAIL,
-                attempt = chainAttempt,
-                errorCode = adError.code.name,
-                errorMessage = adError.message,
-                latencyMs = SystemClock.elapsedRealtime() - requestStartedAtMs,
-            )
-            // Splash đang chờ -> đổi sang ID dự phòng. Còn lại SDK tự retry với backoff, không cần làm gì.
-            val next = chain?.takeIf { wantShow && adError.code.allowsFallback() && it.hasNext }?.next()
-            if (next != null) {
-                AppOpenPreloadHub.release(preloadId, this)
-                preloadUnitId = null
-                chainAttempt++
-                AdCore.postMain(AD_FALLBACK_DELAY_MS) { if (wantShow) startPreload(next) }
-                return
-            }
-            // SDK retry nhiều lần khi mạng hỏng: chỉ báo app 1 lần mỗi đợt lỗi, trừ khi có người đang chờ ad.
-            val someoneWaiting = wantShow || splashClosed != null
-            wantShow = false
-            if (someoneWaiting || !preloadFailNotified) {
-                preloadFailNotified = true
-                fail(AdmErrorType.AD_IS_NOT_AVAILABLE)
-            }
-        }
-    }
-
-    /** True khi buffer có ad sẵn để show ngay. */
+    /** True khi đang giữ một ad còn hạn để show ngay. */
     val isReady: Boolean
-        get() = preloadUnitId?.let { AppOpenAdPreloader.isAdAvailable(it) } == true
+        get() = loadedAd != null && !isExpired()
 
     // ========================= Công khai ========================
 
     /**
-     * Bật auto-show app-open khi app trở lại foreground (ProcessLifecycle ON_START). Mobile Ads sẵn là tự
-     * preload ngay -> lần quay lại đầu tiên đã có ad. Mỗi resume kiểm tra [GlobalVariables.canShowOpenAd]
-     * + [GlobalVariables.isShowPopup].
+     * Bật auto-show app-open khi app trở lại foreground (ProcessLifecycle ON_START). Ad được nạp lúc app xuống nền
+     * (ON_STOP) — KHÔNG nạp ngay lúc bật — nên ad chỉ nạp khi người dùng thật sự rời app. Mỗi resume kiểm tra
+     * [GlobalVariables.canShowOpenAd] + [GlobalVariables.isShowPopup]; lúc xuống nền `canShowOpenAd = false` thì
+     * cũng không nạp.
      *
      * @param index -1 xoay vòng / >=0 id cụ thể.
      * @param skipFirstStart bỏ qua ON_START đầu (cold start / splash đang lo).
      */
     fun resumeAd(index: Int = -1, skipFirstStart: Boolean = true) {
         if (resumeObserver != null) { log("resumeAd đã bật"); return }
-        if (bailIfPremium()) { log("resumeAd: premium -> không bật"); return }  // premium: không preload/observer
+        if (bailIfPremium()) { log("resumeAd: premium -> không bật"); return }
         skipNextStart = skipFirstStart
         val obs = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_STOP ->
-                    if (skipResumeAfterAdClick && AdCore.adClickedWithin(AD_CLICK_WINDOW_MS)) leftAppByAdClick = true
+                Lifecycle.Event.ON_STOP -> onBackground(index)
                 Lifecycle.Event.ON_START -> onForeground(index)
                 else -> Unit
             }
         }
         resumeObserver = obs
         ProcessLifecycleOwner.get().lifecycle.addObserver(obs)
-        log("resumeAd bật")
-        AdCore.whenAdsReady { if (resumeObserver === obs) load(index) }
+        log("resumeAd bật — nạp khi app xuống nền, show khi quay lại")
+    }
+
+    private fun onBackground(index: Int) {
+        if (skipResumeAfterAdClick && AdCore.adClickedWithin(AD_CLICK_WINDOW_MS)) leftAppByAdClick = true
+        if (premiumBlock() != null) return
+        // Không có mạng / Mobile Ads chưa sẵn: lặng lẽ bỏ, lần xuống nền sau thử lại (không báo onError mỗi lần).
+        preloadError(null)?.let { log("xuống nền, chưa nạp được: $it"); return }
+        load(index)   // đã có ad / đang nạp / canShowOpenAd=false -> load tự bỏ qua
     }
 
     private fun onForeground(index: Int) {
-        // Mua premium runtime -> dọn preloader + gỡ observer (ngừng hẳn).
+        // Mua premium runtime -> bỏ ad + gỡ observer (ngừng hẳn).
         if (bailIfPremium()) {
             resumeObserver?.let { ProcessLifecycleOwner.get().lifecycle.removeObserver(it) }
             resumeObserver = null
@@ -251,12 +171,12 @@ class AdmOpenAd internal constructor() : AppOpenAdEventCallback {
             log("chưa đủ ${minResumeIntervalMs}ms từ lần show trước -> bỏ")
             return
         }
-        show(index, waitForLoad = false)   // chưa sẵn -> chỉ preload, KHÔNG show trễ
+        show(index, waitForLoad = false)   // chưa sẵn -> bỏ lần này, KHÔNG show trễ
     }
 
     /**
      * Cold-start splash: load + show. [onClosed] fire 1 lần khi **ad đóng / lỗi / quá [timeoutMs]**
-     * (preload chưa kịp) -> splash gọi tiếp vào main. [index] chọn id. Mobile Ads chưa init xong thì tự chờ
+     * (nạp chưa kịp) -> splash gọi tiếp vào main. [index] chọn id. Mobile Ads chưa init xong thì tự chờ
      * trong [timeoutMs]; consent không cho request ad -> [onClosed] ngay.
      */
     fun showFromSplash(
@@ -286,12 +206,13 @@ class AdmOpenAd internal constructor() : AppOpenAdEventCallback {
         wantShow = false
         val cb = splashClosed ?: return
         splashClosed = null
-        mainHandler.post { cb() }   // callback có thể đến từ thread ad/preload -> ép về main
+        mainHandler.post { cb() }   // callback có thể đến từ thread ad -> ép về main
     }
 
-    /** Dừng preload + gỡ observer resume (gọi khi rời màn / tắt). */
+    /** Bỏ ad đang giữ + gỡ observer resume (gọi khi rời màn / tắt). */
     fun destroy() {
         log("destroy ${tag()}")
+        generation++
         cancelShowWatchdog()
         releasePopup()
         wantShow = false
@@ -300,47 +221,119 @@ class AdmOpenAd internal constructor() : AppOpenAdEventCallback {
         splashClosed = null
         resumeObserver?.let { ProcessLifecycleOwner.get().lifecycle.removeObserver(it) }
         resumeObserver = null
-        preloadUnitId?.let { AppOpenPreloadHub.release(it, preloadListener) }
-        preloadUnitId = null
+        loadedAd.safeDestroy()
+        loadedAd = null
+        loading = false
+        currentUnit = null
     }
 
     // ========================= Nội bộ ===========================
 
-    /** Preload buffer cho id theo [index] (-1 xoay vòng). canShowOpenAd=false / đang preload -> bỏ. */
+    /** Nạp 1 ad theo [index] (-1 xoay vòng + dự phòng). canShowOpenAd=false / đã có ad / đang nạp -> bỏ. */
     private fun load(index: Int = -1, customIds: List<String>? = null, force: Boolean = false) {
         if (!force && !GlobalVariables.canShowOpenAd) { log("canShowOpenAd=false -> không load"); return }
-        if (bailIfPremium()) return                 // premium -> dọn buffer + return
+        if (bailIfPremium()) return
         preloadError(customIds)?.let { fail(it); return }    // còn lại: UMP/network/empty
-        if (preloadUnitId != null) return                          // đang preload -> bỏ qua
+        dropAdIfExpired()
+        if (loadedAd != null || loading) return
 
         // customIds != null -> xoay vòng list đó thay cho AdmConfigAdId.listOpenAdUnitID.
         val u = customIds?.filter { it.isNotBlank() }?.takeIf { it.isNotEmpty() } ?: units()
-        val newChain = AdUnitChain.build(u, index, maxFallbackUnits) { CURSOR.next(u.size) }
-        val first = newChain?.next() ?: run { fail(AdmErrorType.AD_ID_IS_NOT_EXIST); return }
-        chain = newChain
-        chainAttempt = 0
-        startPreload(first)
+        val chain = AdUnitChain.build(u, index, maxFallbackUnits) { CURSOR.next(u.size) }
+            ?: run { fail(AdmErrorType.AD_ID_IS_NOT_EXIST); return }
+        loading = true
+        requestNext(chain, attempt = 0, gen = generation)
     }
 
-    private fun startPreload(attempt: AdUnitChain.Attempt) {
-        preloadUnitId = attempt.unitId
-        currentIndex = attempt.index
-        requestStartedAtMs = SystemClock.elapsedRealtime()
-        log("load (preload) ${tag()}")
-        report(AdmAdEventType.LOAD_REQUEST, attempt = chainAttempt)
+    private fun requestNext(chain: AdUnitChain, attempt: Int, gen: Int) {
+        val next = chain.next() ?: run { onChainFailed(); return }
+        currentUnit = next.unitId
+        currentIndex = next.index
+        val startedAt = SystemClock.elapsedRealtime()
+        log("load ${tag()}${if (attempt > 0) " [dự phòng $attempt]" else ""}")
+        report(AdmAdEventType.LOAD_REQUEST, attempt = attempt)
 
-        val config = PreloadConfiguration(AdRequest.Builder(attempt.unitId).build(), bufferSize)
-        if (!AppOpenPreloadHub.acquire(attempt.unitId, config, preloadListener)) {
-            preloadUnitId = null
+        val result = runCatching {
+            AppOpenAd.load(AdRequest.Builder(next.unitId).build(), object : AdLoadCallback<AppOpenAd> {
+                // Callback đến từ thread nền (GMA Next-Gen) -> về main trước khi đụng state/hook.
+                override fun onAdLoaded(ad: AppOpenAd) = AdCore.onMain {
+                    if (gen != generation) { ad.safeDestroy(); return@onMain }
+                    onLoaded(ad, attempt, startedAt)
+                }
+
+                override fun onAdFailedToLoad(adError: LoadAdError) = AdCore.onMain {
+                    if (gen != generation) return@onMain
+                    onLoadFailed(adError, chain, attempt, startedAt, gen)
+                }
+            })
+        }
+        result.exceptionOrNull()?.let { error ->
+            Log.w(TAG, "load exception ${tag()}", error)
+            onChainFailed()
+        }
+    }
+
+    private fun onLoaded(ad: AppOpenAd, attempt: Int, startedAt: Long) {
+        loading = false
+        loadFailNotified = false
+        loadedAd = ad
+        loadedAtMs = SystemClock.elapsedRealtime()
+        log("loaded ${tag()}")
+        report(
+            AdmAdEventType.LOAD_SUCCESS,
+            attempt = attempt,
+            latencyMs = loadedAtMs - startedAt,
+            adSource = ad.getResponseInfo().adSourceName(),
+        )
+        onAvailable(ad.getResponseInfo())
+        if (wantShow) {
             wantShow = false
+            show(wantIndex, customIds = wantCustomIds)
+        }
+    }
+
+    private fun onLoadFailed(error: LoadAdError, chain: AdUnitChain, attempt: Int, startedAt: Long, gen: Int) {
+        log("load FAIL ${tag()}: ${error.code} ${error.message}")
+        report(
+            AdmAdEventType.LOAD_FAIL,
+            attempt = attempt,
+            errorCode = error.code.name,
+            errorMessage = error.message,
+            latencyMs = SystemClock.elapsedRealtime() - startedAt,
+        )
+        if (error.code.allowsFallback() && chain.hasNext) {
+            AdCore.postMain(AD_FALLBACK_DELAY_MS) { if (gen == generation) requestNext(chain, attempt + 1, gen) }
+            return
+        }
+        onChainFailed()
+    }
+
+    private fun onChainFailed() {
+        loading = false
+        currentUnit = null
+        // Nạp nền hỏng liên tục khi mạng chập chờn: chỉ báo app 1 lần mỗi đợt lỗi, trừ khi có người đang chờ ad.
+        val someoneWaiting = wantShow || splashClosed != null
+        wantShow = false
+        if (someoneWaiting || !loadFailNotified) {
+            loadFailNotified = true
             fail(AdmErrorType.AD_IS_NOT_AVAILABLE)
         }
     }
 
+    private fun isExpired(): Boolean = SystemClock.elapsedRealtime() - loadedAtMs >= adTtlMs
+
+    private fun dropAdIfExpired() {
+        if (loadedAd != null && isExpired()) {
+            log("ad giữ quá ${adTtlMs}ms -> bỏ")
+            loadedAd.safeDestroy()
+            loadedAd = null
+        }
+    }
+
     /**
-     * Sẵn -> show NGAY (SDK đã tự làm mới ad sắp hết hạn trong buffer). Chưa sẵn: [waitForLoad] true ->
-     * load([index]) rồi show khi xong (splash); false -> chỉ preload, KHÔNG show (resume: bỏ lần này,
-     * foreground sau mới show). Premium / popup khác đang hiện / app không ở foreground -> bỏ.
+     * Có ad -> show NGAY. Chưa có: [waitForLoad] true -> load([index]) rồi show khi xong (splash); false -> không
+     * show, không nạp (resume: ad cho lần quay lại kế được nạp lúc xuống nền). Premium / popup khác đang hiện / app
+     * không ở foreground -> bỏ.
      */
     private fun show(index: Int = -1, waitForLoad: Boolean = true, customIds: List<String>? = null, force: Boolean = false) {
         val act = AdCore.currentActivity ?: run { fail(AdmErrorType.ACTIVITY_IS_NOT_AVAILABLE); return }
@@ -348,25 +341,27 @@ class AdmOpenAd internal constructor() : AppOpenAdEventCallback {
         premiumBlock()?.let { fail(it); return }
         if (GlobalVariables.isShowPopup) { log("full-screen/dialog khác đang hiện, bỏ qua"); return }
 
-        val id = preloadUnitId
-        if (id != null && AppOpenAdPreloader.isAdAvailable(id)) {
-            markPopup(); pollAndShow(act, id); return
+        dropAdIfExpired()
+        val ad = loadedAd
+        if (ad != null) {
+            markPopup()
+            present(act, ad)
+            return
         }
-        if (preloadUnitId == null) load(index, customIds, force)
-        if (waitForLoad) {
-            if (preloadUnitId == null) return   // load lỗi ngay (đã báo onError)
-            wantShow = true
-            wantIndex = index
-            wantCustomIds = customIds
-            log("chưa sẵn -> load rồi show ${tag()}")
-        } else {
-            log("chưa sẵn -> chỉ preload, bỏ show lần này ${tag()}")
+        if (!waitForLoad) {
+            log("chưa có ad (${if (loading) "đang nạp" else "chưa nạp"}) -> bỏ lần này ${tag()}")
+            return
         }
+        if (!loading) load(index, customIds, force)
+        if (!loading) return   // load lỗi ngay (đã báo onError)
+        wantShow = true
+        wantIndex = index
+        wantCustomIds = customIds
+        log("chưa sẵn -> load rồi show ${tag()}")
     }
 
-    private fun pollAndShow(activity: Activity, id: String) {
-        val ad = runCatching { AppOpenAdPreloader.pollAd(id) }.getOrNull()
-        if (ad == null) { log("pollAd null ${tag()}"); fail(AdmErrorType.AD_IS_NOT_AVAILABLE); return }
+    private fun present(activity: Activity, ad: AppOpenAd) {
+        loadedAd = null   // one-shot: show xong KHÔNG nạp bù
         log("show ${tag()}")
         report(AdmAdEventType.SHOW_REQUEST)
         ad.adEventCallback = this
@@ -468,14 +463,11 @@ class AdmOpenAd internal constructor() : AppOpenAdEventCallback {
         }
     }
 
-    /**
-     * Premium -> DỌN preloader buffer đang chạy + báo lỗi, trả true (caller phải return).
-     * Khác guard thường: preloader tự giữ buffer, chỉ `return` không đủ -> phải destroy.
-     */
+    /** Premium -> bỏ ad đang giữ + báo lỗi, trả true (caller phải return). */
     private fun bailIfPremium(): Boolean {
         val err = premiumBlock() ?: return false
-        preloadUnitId?.let { AppOpenPreloadHub.release(it, preloadListener) }
-        preloadUnitId = null
+        loadedAd.safeDestroy()
+        loadedAd = null
         fail(err)
         return true
     }
@@ -516,7 +508,7 @@ class AdmOpenAd internal constructor() : AppOpenAdEventCallback {
             AdmAdEvent(
                 format = AdmAdFormat.APP_OPEN,
                 type = type,
-                adUnitId = preloadUnitId,
+                adUnitId = currentUnit,
                 errorCode = errorCode,
                 errorMessage = errorMessage,
                 latencyMs = latencyMs,

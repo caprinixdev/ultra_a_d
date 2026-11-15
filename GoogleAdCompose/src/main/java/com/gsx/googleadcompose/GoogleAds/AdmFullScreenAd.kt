@@ -65,6 +65,12 @@ abstract class AdmFullScreenAd<T : Ad> internal constructor(
     /** Kênh báo lỗi duy nhất (xem [AdmErrorType]). */
     var onError: (AdmErrorType) -> Unit = {}
 
+    /**
+     * Một lượt [load] hỏng: hết ID dự phòng mà không có ad, hoặc không nạp được ngay khi gọi (premium, mất mạng,
+     * chưa init, không có ID). Báo cả khi không có ai đang chờ show — [onError] chỉ báo lỗi nạp lúc có show đang chờ.
+     */
+    var onLoadFailed: (AdmErrorType) -> Unit = {}
+
     // ---- Hook sự kiện cho app ----
     /** Ad load xong (sẵn để show) -> trả [ResponseInfo]. */
     var onAvailable: (ResponseInfo) -> Unit = {}
@@ -122,14 +128,14 @@ abstract class AdmFullScreenAd<T : Ad> internal constructor(
      */
     fun load(index: Int = -1, customIds: List<String>? = null) {
         if (bailIfPremium()) return
-        loadError(customIds)?.let { fail(it); return }
+        loadError(customIds)?.let { failLoad(it); return }
         dropAdIfExpired()
         if (loadedAd != null || loading) return
         if (isCoolingDown()) { log("vừa load hụt, chờ hết cooldown"); return }
 
         val units = customIds?.filter { it.isNotBlank() }?.takeIf { it.isNotEmpty() } ?: units()
         val chain = AdUnitChain.build(units, index, maxFallbackUnits) { cursor.next(units.size) }
-            ?: run { fail(AdmErrorType.AD_ID_IS_NOT_EXIST); return }
+            ?: run { failLoad(AdmErrorType.AD_ID_IS_NOT_EXIST); return }
         loading = true
         requestNext(chain, attempt = 0, gen = generation)
     }
@@ -203,7 +209,7 @@ abstract class AdmFullScreenAd<T : Ad> internal constructor(
 
                 override fun onAdFailedToLoad(adError: LoadAdError) = AdCore.onMain {
                     if (gen != generation) return@onMain
-                    onLoadFailed(adError, chain, next.unitId, attempt, startedAt, gen)
+                    handleLoadFailure(adError, chain, next.unitId, attempt, startedAt, gen)
                 }
             })
         }
@@ -231,7 +237,7 @@ abstract class AdmFullScreenAd<T : Ad> internal constructor(
         showPendingIfAny()
     }
 
-    private fun onLoadFailed(
+    private fun handleLoadFailure(
         error: LoadAdError,
         chain: AdUnitChain,
         unit: String,
@@ -261,6 +267,7 @@ abstract class AdmFullScreenAd<T : Ad> internal constructor(
         loading = false
         currentUnit = null
         lastLoadFailedAtMs = SystemClock.elapsedRealtime()
+        onLoadFailed(AdmErrorType.AD_IS_NOT_AVAILABLE)
         failPending(AdmErrorType.AD_IS_NOT_AVAILABLE)
     }
 
@@ -463,14 +470,20 @@ abstract class AdmFullScreenAd<T : Ad> internal constructor(
         }
     }
 
-    /** Premium -> bỏ ad đang giữ + báo [onError], trả true (caller return). */
+    /** Premium -> bỏ ad đang giữ + báo [onLoadFailed] và [onError], trả true (caller return). */
     private fun bailIfPremium(): Boolean {
         val err = premiumBlock() ?: return false
         loadedAd?.safeDestroy()
         loadedAd = null
         currentUnit = null
-        fail(err)
+        failLoad(err)
         return true
+    }
+
+    /** Không nạp được ngay khi gọi [load]: báo [onLoadFailed] rồi [onError] như trước. */
+    private fun failLoad(type: AdmErrorType) {
+        onLoadFailed(type)
+        fail(type)
     }
 
     private fun loadError(customIds: List<String>?): AdmErrorType? {

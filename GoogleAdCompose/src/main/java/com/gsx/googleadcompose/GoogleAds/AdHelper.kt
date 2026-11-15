@@ -6,7 +6,7 @@ import androidx.compose.runtime.remember
 
 /**
  * Compose helper cho ad full-screen — tạo instance riêng cho màn, tự destroy khi rời màn
- * (dọn preload buffer). [remember] giữ instance sống qua recompose; app khỏi tự viết
+ * (bỏ ad đang giữ). [remember] giữ instance sống qua recompose; app khỏi tự viết
  * `remember{}` + `DisposableEffect { onDispose { destroy() } }`.
  *
  * ```
@@ -24,7 +24,11 @@ fun AdmReward(configure: AdmRewardAd.() -> Unit = {}): AdmRewardAd {
     return ad
 }
 
-/** Tạo [AdmInterstitialAd] riêng cho màn, tự destroy khi rời màn. */
+/**
+ * Tạo [AdmInterstitialAd] riêng cho màn, tự destroy khi rời màn — ad đã nạp cũng bị huỷ theo. Chỉ hợp khi màn đó chắc
+ * chắn hiện ad mỗi lần vào. Inter dùng ở nhiều màn, hay hiện theo lượt (cứ N lần bấm) -> dùng [AdmSharedInterstitial],
+ * không thì mỗi lần vào màn mà không hiện là một lần nạp phí, show rate tụt.
+ */
 @Composable
 fun AdmInterstitial(configure: AdmInterstitialAd.() -> Unit = {}): AdmInterstitialAd {
     val ad = remember { AdmInterstitialAd().apply(configure) }

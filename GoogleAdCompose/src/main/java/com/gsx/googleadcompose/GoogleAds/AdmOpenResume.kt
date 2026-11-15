@@ -2,7 +2,7 @@ package com.gsx.googleadcompose.GoogleAds
 
 /**
  * App-open resume cấp app — gọi 1 lần trong `Application.onCreate`. Giữ 1 [AdmOpenAd] sống cả phiên,
- * tự preload + show khi app trở lại foreground (check `canShowOpenAd` + `isShowPopup`).
+ * nạp ad lúc app xuống nền và show khi app trở lại foreground (check `canShowOpenAd` + `isShowPopup`).
  *
  * ```
  * class App : Application() {
@@ -12,7 +12,7 @@ package com.gsx.googleadcompose.GoogleAds
  *     }
  * }
  * ```
- * UMP/MobileAds init ở splash -> ON_START đầu (cold) bị bỏ qua, preload chạy nền; các resume sau show.
+ * UMP/MobileAds init ở splash -> ON_START đầu (cold) bị bỏ qua; mỗi lần xuống nền nạp 1 ad, lần quay lại sau show.
  */
 object AdmOpenResume {
 
