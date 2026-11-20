@@ -13,6 +13,7 @@ package com.gsx.googleadcompose.GoogleAds
  * }
  * ```
  * UMP/MobileAds init ở splash -> ON_START đầu (cold) bị bỏ qua; mỗi lần xuống nền nạp 1 ad, lần quay lại sau show.
+ * Show rate cao hơn (kiểu SDK 1.0.21): `start { loadOnReturn = true }` — nạp lúc quay lại, dialog chờ rồi show.
  */
 object AdmOpenResume {
 

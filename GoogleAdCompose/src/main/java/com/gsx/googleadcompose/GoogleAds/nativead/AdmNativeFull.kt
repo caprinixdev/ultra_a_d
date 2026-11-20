@@ -60,7 +60,9 @@ import kotlinx.coroutines.delay
  * Back bị chặn tới khi tắt được.
  *
  * - Truyền [nativeAds] (preload, app sở hữu) -> show, KHÔNG destroy. Ad null -> mượn ad khác trong list.
- * - [nativeAds] == null -> tự load [pages] ad ([index]/[customIds]), tự destroy khi rời màn.
+ * - [nativeAds] == null -> tự load [adsToLoad] ad (mặc định [pages], [index]/[customIds]), tự destroy khi rời màn.
+ *   `adsToLoad = 1`: cả story một ad, trang sau dùng lại — ad thứ hai hay về muộn / người dùng thoát trước trang 2
+ *   thì không bao giờ lên màn, mỗi lần như vậy là một matched request không có impression (kéo show rate xuống).
  * - Không có ad nào sau thời gian chờ / premium -> gọi [onClose] luôn. Lỗi load chỉ báo qua onError khi
  *   không trang nào có ad, nên app đừng coi 1 lần onError là phải đóng story sớm.
  *
@@ -75,12 +77,14 @@ fun AdmNativeFullStory(
     nativeAds: List<NativeAd?>? = null,
     pages: Int = 2,
     stepMs: Long = 5_000L,
+    adsToLoad: Int = pages,
     index: Int = -1,
     customIds: List<String>? = null,
     onClose: () -> Unit,
     configure: AdmNativeAd.() -> Unit = {},
 ) {
     @Suppress("NAME_SHADOWING") val pages = pages.coerceAtLeast(1)
+    val loadCount = adsToLoad.coerceIn(1, pages)
     val currentOnClose by rememberUpdatedState(onClose)
     if (AdmNativeAd.isPremiumBlocked()) {                   // premium -> không hiện, đi tiếp luôn
         LaunchedEffect(Unit) { currentOnClose() }
@@ -90,14 +94,14 @@ fun AdmNativeFullStory(
     val selfLoad = nativeAds == null
 
     // ---- Self-load: mỗi trang 1 controller (giữ ad + hook), destroy khi rời màn ----
-    val controllers = remember { List(pages) { AdmNativeAd() } }
+    val controllers = remember { List(loadCount) { AdmNativeAd() } }
     controllers.forEach {
         it.applyConfig(configure)
         // 1 trang hụt vẫn mượn được ad của trang khác: chỉ báo onError khi không trang nào có ad.
         it.holdRetryableErrors = true
     }
-    val selfAds = remember { mutableStateListOf<NativeAd?>().apply { repeat(pages) { add(null) } } }
-    val selfDone = remember { mutableStateListOf<Boolean>().apply { repeat(pages) { add(false) } } }
+    val selfAds = remember { mutableStateListOf<NativeAd?>().apply { repeat(loadCount) { add(null) } } }
+    val selfDone = remember { mutableStateListOf<Boolean>().apply { repeat(loadCount) { add(false) } } }
     LaunchedEffect(Unit) {
         if (isPreview || !selfLoad) return@LaunchedEffect
         controllers.forEachIndexed { i, c ->

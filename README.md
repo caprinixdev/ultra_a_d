@@ -46,7 +46,7 @@ dependencyResolutionManagement {
 
 ```kotlin
 dependencies {
-    implementation("com.github.caprinixdev:ultra_a_d:1.0.24")
+    implementation("com.github.caprinixdev:ultra_a_d:1.0.27")
 }
 ```
 
@@ -151,7 +151,11 @@ if (ump.isPrivacyOptionsRequired) {
 
 ## 3. App Open ad
 
-Nạp từng ad một (`AppOpenAd.load`), giữ tối đa 1 ad, show 1 lần rồi bỏ, không dialog loading. Show xong **không nạp bù**: từ 1.0.26 bỏ `AppOpenAdPreloader`, vì preloader tự nạp lại sau mỗi lần show (ad nạp sau splash bị vứt khi màn splash huỷ instance) và nạp ngay lúc bật resume, làm show rate App Open tụt. Ad giữ quá `adTtlMs` (mặc định 3 giờ 55 phút) thì bỏ. Hai cách dùng:
+Nạp từng ad một (`AppOpenAd.load`), giữ tối đa 1 ad, show 1 lần rồi bỏ, không dialog loading. Show xong **không nạp bù**: từ 1.0.26 bỏ `AppOpenAdPreloader`, vì preloader tự nạp lại sau mỗi lần show (ad nạp sau splash bị vứt khi màn splash huỷ instance) và nạp ngay lúc bật resume, làm show rate App Open tụt. Ad giữ quá `adTtlMs` (mặc định 3 giờ 55 phút) thì bỏ.
+
+**Ad không ai dùng được để dành (từ 1.0.27).** Splash hết `timeoutMs` rồi ad mới về, hoặc màn splash đóng (instance bị destroy) lúc ad đang về: trước đây ad đó bị huỷ, mỗi lần như vậy là một matched request không có impression, gần như mỗi lần mở app trên mạng chậm. Giờ SDK để dành ad đó (tối đa 1 ad cho cả app), và instance resume lấy ra show ở lần quay lại app kế tiếp thay vì xin ad mới. Instance nào cũng lấy ad để dành trước khi xin ad mới. App không cần sửa gì. Ad để dành có thể thuộc ad unit khác (ad unit splash hiện ở chỗ resume); app muốn tách bạch ad unit theo chỗ đặt thì đặt `keepUnusedAd = false` trên instance. Mua premium thì ad để dành bị huỷ.
+
+Hai cách dùng:
 
 ### 3.1 Resume — tự show khi app trở lại foreground
 
@@ -171,7 +175,20 @@ class App : Application() {
 
 Ad được nạp lúc app **xuống nền** (ON_STOP), nên lúc người dùng quay lại (ON_START) là có ad; quay lại nhanh quá chưa nạp kịp thì bỏ lần đó, không show trễ (ad về sau giữ cho lần quay lại kế). Không nạp ngay lúc bật, không nạp bù sau khi show. Lúc xuống nền và lúc quay lại đều kiểm tra `GlobalVariables.canShowOpenAd`; lúc show kiểm tra thêm `isShowPopup` (mutex full-screen).
 
-Tuỳ chỉnh: `minResumeIntervalMs` (khoảng cách tối thiểu giữa 2 lần show, mặc định 0) · `skipResumeAfterAdClick` (user rời app do bấm ad thì lúc quay lại không show thêm, mặc định `true`).
+Tuỳ chỉnh: `minResumeIntervalMs` (khoảng cách tối thiểu giữa 2 lần show, mặc định 0) · `skipResumeAfterAdClick` (user rời app do bấm ad thì lúc quay lại không show thêm, mặc định `true`) · `keepUnusedAd` (xem trên, mặc định `true`).
+
+**Show rate cao — nạp lúc quay lại (kiểu SDK 1.0.21 bản XML, từ 1.0.27).** Cách nạp sẵn ở trên luôn phí ad của lần xuống nền cuối phiên: người dùng thoát hẳn, process chết, ad chưa bao giờ hiện, nên show rate App Open chỉ khoảng 15–25%. Bản XML 1.0.21 cho app gọi `loadAds(isShowAd = true)` lúc quay lại (chưa có ad thì mới nạp, nạp xong hiện luôn). Bật lại cách đó:
+
+```kotlin
+AdmOpenResume.start {
+    loadOnReturn = true        // không nạp lúc xuống nền; quay lại mới nạp rồi show
+    returnWaitMs = 5_000       // chờ tối đa; quá thì bỏ lượt này, ad về sau để dành cho lần quay lại kế
+    returnShowsLoading = true  // dialog "Loading..." lúc chờ (bấm Back = thôi chờ). false = ad tự bật lên như 1.0.21
+    loadingText = "Loading..."
+}
+```
+
+Quay lại mà đã có ad (ad splash về muộn được để dành, ad lần trước về sau khi hết giờ chờ) thì show ngay, không dialog. Mọi ad đều nạp đúng lúc sắp show, nên gần như không ad nào phí. Đổi lại, lần quay lại chưa có ad người dùng phải chờ 1–3 giây. `loadOnReturn` được đọc mỗi lần quay lại, nên có thể bật/tắt bằng Remote Config.
 
 ### 3.2 Splash — cold start load + show ngay
 
@@ -287,7 +304,7 @@ if (showStory) AdmNativeFullStory(nativeAds = storyAds, onClose = { showStory = 
 
 > Đừng preload native story cùng lúc `inter.load()`: inter nạp mà không bao giờ hiện thì 2 native đi kèm cũng bị vứt — mỗi lần là thêm matched request không có lượt hiện.
 
-`nativeAds = null` → tự load `pages` ad và tự destroy. Ad của trang null → mượn ad khác trong list; không có ad nào → báo `onError` đúng 1 lần rồi `onClose`. Vì cả hai đều được gọi, nếu đóng màn trong cả hai thì phải có chốt để chỉ đóng 1 lần.
+`nativeAds = null` → tự load `adsToLoad` ad (mặc định bằng `pages`) và tự destroy. **Show rate cao: `adsToLoad = 1`** (hoặc preload 1 ad thay vì 2 ở ví dụ trên) — cả story một ad, trang 2 dùng lại. Ad thứ hai hay về muộn hoặc người dùng thoát trước trang 2, ad đó không bao giờ lên màn (đo ở Mesh: 10 ad nạp / 5 lượt hiện). Ad của trang null → mượn ad khác trong list; không có ad nào → báo `onError` đúng 1 lần rồi `onClose`. Vì cả hai đều được gọi, nếu đóng màn trong cả hai thì phải có chốt để chỉ đóng 1 lần.
 
 ### 4.5 Native PIP (nổi, kéo thả)
 
@@ -358,6 +375,8 @@ Button(onClick = { inter.show { shown -> goNext() } }) { Text("Xong") }
 - Tuỳ chỉnh qua `inter.ad` (bảng dưới), vd `inter.ad.waitWhenNotReady = false`.
 - Placement phải dùng unit riêng → instance riêng: `AdmSharedInterstitial.get("splash")` + `index`.
 - User vừa mua premium → `AdmSharedInterstitial.clearAll()` bỏ ad đang giữ.
+
+**Show rate cao nhất — không nạp sẵn (như `showPopupLoadAds` bản XML 1.0.21).** Nạp sẵn (`load()` / `preloadIfDue()`) luôn để thừa 1 ad cuối phiên nên show rate kẹt ở khoảng N/(N+1) (phiên hiện 2 inter → 67%, 4 inter → 80%). Bỏ hẳn `load()` / `preloadIfDue()`, chỉ gọi `show` / `countToShow`: chưa có ad thì SDK nạp và chờ với dialog "Loading…" (tối đa `inter.ad.loadTimeoutMs`, mặc định 8 s), về muộn thì giữ cho lượt sau. Ad nào nạp cũng hiện, đổi lại mỗi lượt người dùng chờ 1–3 giây.
 
 ### 6.2 Inter riêng cho một màn
 
