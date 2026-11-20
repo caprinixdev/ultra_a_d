@@ -37,6 +37,10 @@ import com.gsx.googleadcompose.error.AdmErrorType
 import com.gsx.googleadcompose.helper.NetworkHelper
 import com.gsx.googleadcompose.utils.PreferencesManager
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 
 /**
@@ -117,6 +121,10 @@ class AdmBannerAd internal constructor() : BannerAdEventCallback {
     @Volatile
     var bannerAd: BannerAd? = null
         private set
+    private var loadedAtMs = 0L
+
+    /** Nhóm dùng lại ([reuseKey]) của banner đang giữ — để [park] cất đúng nhóm. */
+    internal var keyInUse: String? = null
 
     /** True khi premium -> không nên hiện banner. */
     fun isBlockedByPremium(): Boolean = premiumBlock() != null
@@ -165,15 +173,7 @@ class AdmBannerAd internal constructor() : BannerAdEventCallback {
             when (result) {
                 is AdLoadResult.Success -> {
                     val ad = result.ad
-                    ad.adEventCallback = this
-                    ad.bannerAdRefreshCallback = object : BannerAdRefreshCallback {
-                        // Refresh callback đến từ thread nền -> về main trước khi gọi hook app.
-                        override fun onAdRefreshed() = AdCore.onMain { log("refreshed ${tag()}"); onRefreshed() }
-                        override fun onAdFailedToRefresh(adError: LoadAdError) = AdCore.onMain {
-                            log("refresh FAIL ${tag()}: ${adError.code} ${adError.message}")
-                        }
-                    }
-                    bannerAd = ad
+                    bind(ad, SystemClock.elapsedRealtime())
                     log("loaded ${tag()}")
                     report(
                         AdmAdEventType.LOAD_SUCCESS,
@@ -202,6 +202,49 @@ class AdmBannerAd internal constructor() : BannerAdEventCallback {
         }
         fail(AdmErrorType.AD_IS_NOT_AVAILABLE)
         return null
+    }
+
+    /** Nhận [ad] làm banner đang giữ: gắn event + refresh callback về controller này. */
+    private fun bind(ad: BannerAd, loadedAt: Long) {
+        ad.adEventCallback = this
+        ad.bannerAdRefreshCallback = object : BannerAdRefreshCallback {
+            // Refresh callback đến từ thread nền -> về main trước khi gọi hook app.
+            override fun onAdRefreshed() = AdCore.onMain { log("refreshed ${tag()}"); onRefreshed() }
+            override fun onAdFailedToRefresh(adError: LoadAdError) = AdCore.onMain {
+                log("refresh FAIL ${tag()}: ${adError.code} ${adError.message}")
+            }
+        }
+        bannerAd = ad
+        loadedAtMs = loadedAt
+    }
+
+    /**
+     * Nhóm banner thay được cho nhau: cùng Activity, cùng list/ID, cùng cỡ thật, cùng kiểu collapsible.
+     * Banner rời màn được giữ theo nhóm này ([BANNER_REUSE]) cho [AdmBanner] kế cùng nhóm hiện lại.
+     */
+    internal fun reuseKey(activity: Activity, index: Int, customIds: List<String>?): String {
+        val s = adSize(activity)
+        val ids = customIds?.filter { it.isNotBlank() }?.joinToString(",") ?: "#$index"
+        return "${System.identityHashCode(activity)}|$ids|${s.width}x${s.height}|$collapsible"
+    }
+
+    /** Lấy banner đang giữ của nhóm [key] (nếu còn hạn) làm ad của controller này. */
+    internal fun adoptReused(key: String): BannerAd? {
+        if (premiumBlock() != null) return null
+        val e = BANNER_REUSE.take(key, SystemClock.elapsedRealtime()) ?: return null
+        bind(e.ad, e.loadedAtMs)
+        unitId = runCatching { e.ad.adUnitId }.getOrNull() ?: unitId
+        log("dùng lại banner ${tag()} (không xin ad mới)")
+        return e.ad
+    }
+
+    /** Rời màn: giữ banner đang có cho [AdmBanner] kế cùng nhóm [key] thay vì huỷ (premium thì huỷ). */
+    internal fun park(key: String? = keyInUse) {
+        val ad = bannerAd ?: return
+        bannerAd = null
+        if (key == null || premiumBlock() != null) { runCatching { ad.destroy() }; return }
+        log("rời màn -> giữ banner ${tag()} để dùng lại")
+        BANNER_REUSE.put(key, ad, loadedAtMs)
     }
 
     /** Hủy ad (gọi khi rời màn). */
@@ -323,6 +366,15 @@ class AdmBannerAd internal constructor() : BannerAdEventCallback {
 }
 
 /**
+ * Banner rời màn / về muộn, chờ [AdmBanner] kế cùng nhóm dùng lại (như `GroupBannerAd` của SDK bản XML): mỗi lần quay
+ * lại màn không xin banner mới, banner collapsible không bung lại. Giữ tối đa 55 phút.
+ */
+private val BANNER_REUSE = AdReusePool<BannerAd>(maxSize = 2, ttlMs = 55L * 60 * 1000) { it.destroy() }
+
+/** Scope nạp banner tách khỏi composable: rời màn lúc đang nạp thì banner về sau vẫn được giữ, không bị vứt. */
+private val BANNER_LOADS = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+/**
  * Compose banner — tự load, tự fill vào view, tự destroy khi rời màn. Premium/offline/UMP chưa sẵn
  * -> render rỗng (báo qua [AdmBannerAd.onError]). Đặt ở đáy màn (anchored) hay bất kỳ đâu.
  *
@@ -355,6 +407,9 @@ fun AdmBanner(
     var ad by remember { mutableStateOf<BannerAd?>(null) }
     var failed by remember { mutableStateOf(false) }
     val blocked = remember { controller.isBlockedByPremium() }
+    val reuseKey = remember(activity, index, customIds, controller.size, controller.collapsible, controller.adWidthDp) {
+        activity?.let { controller.reuseKey(it, index, customIds) }
+    }
 
     // Key theo size/collapsible -> đổi cấu hình tự reload, call-site KHỎI cần key() bọc ngoài.
     // customIds != null -> xoay vòng list id đó thay cho AdmConfigAdId.listBannerAdUnitID.
@@ -369,16 +424,34 @@ fun AdmBanner(
         if (activity == null) {
             controller.onError(AdmErrorType.ACTIVITY_IS_NOT_AVAILABLE); failed = true; return@LaunchedEffect
         }
-        controller.destroy()   // dọn ad cũ trước khi load cỡ mới
+        controller.park()   // banner cỡ cũ (đổi size/collapsible) -> cất theo nhóm cũ, đổi lại là dùng được ngay
         ad = null
         failed = false
+        controller.keyInUse = reuseKey
+        // Banner cùng nhóm vừa rời màn khác / về muộn -> dùng lại, khỏi xin ad mới (show rate + collapsible không bung lại).
+        reuseKey?.let(controller::adoptReused)?.let { ad = it; return@LaunchedEffect }
         // loadAd tự guard premium/UMP/offline/units -> fail() bắn onError (parity với inter).
-        val result = controller.loadAd(activity, index, customIds)
+        // Nạp ở scope riêng: rời màn / đổi cấu hình lúc đang nạp thì banner về sau được giữ cho lần sau, không vứt.
+        var abandoned = false   // cùng main thread với block async dưới -> không cần đồng bộ
+        val key = reuseKey
+        val loading = BANNER_LOADS.async {
+            controller.loadAd(activity, index, customIds).also { late ->
+                // Màn đã rời / đã đổi cấu hình: cất banner vừa về (chỉ nó, không đụng banner controller đang dùng).
+                if (abandoned && late != null && controller.bannerAd === late) controller.park(key)
+            }
+        }
+        val result = try {
+            loading.await()
+        } catch (cancelled: CancellationException) {
+            abandoned = true
+            throw cancelled
+        }
         ad = result
         failed = result == null
     }
 
-    DisposableEffect(Unit) { onDispose { controller.destroy() } }
+    // Rời màn: giữ banner cho AdmBanner kế cùng nhóm thay vì huỷ.
+    DisposableEffect(Unit) { onDispose { controller.park() } }
 
     val loaded = ad
     when {

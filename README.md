@@ -231,6 +231,10 @@ AdmNative(layout = NativeLayout.COLLAPSIBLE, index = -1) {
 
 `collapseReshowSeconds` mặc định `0` (ẩn hẳn). Hiện lại là **cùng ad cũ**, không load mới; `collapseDelaySeconds` đếm lại từ đầu.
 
+`onCollapsed = { ... }` (từ 1.0.27): báo đúng lúc người dùng bấm mũi tên gập. Dùng hook này thay vì đoán qua chiều cao về 0 — lúc đổi shimmer sang ad, view có thể cao 0 trong 1 frame.
+
+> **Native chưa hiện được dùng lại (từ 1.0.27).** Native nạp xong mà chưa có impression — màn đóng khi ad đang về, `AdmNative` rời màn trước khi ad kịp hiện, onboarding (`AdmNativeSequenceState`) bị bỏ dở, story native full đóng sớm — không bị huỷ nữa mà vào kho dùng chung (tối đa 2 ad, 55 phút). Lần nạp native kế (kể cả `AdmNativeAd.preload`) lấy ad trong kho trước khi xin ad mới. Trước đây mỗi ad như vậy là 1 matched request không có impression → tụt show rate.
+
 ### 4.1 Tự load (đơn giản nhất)
 
 ```kotlin
@@ -339,6 +343,8 @@ AdmBanner(Modifier.fillMaxWidth()) {                     // tuỳ biến
 `collapsible`: `NONE` / `TOP` / `BOTTOM` — chỉ chạy với size anchored adaptive (size khác tự ép về `ADAPTIVE`).
 
 Đổi `size`/`collapsible` → tự reload. Đang load → shimmer. Premium/offline → render rỗng.
+
+> **Banner được giữ lại khi rời màn (từ 1.0.27)**, như `GroupBannerAd` của bản XML: `AdmBanner` rời màn (hoặc đổi cỡ) thì banner được cất lại; `AdmBanner` kế cùng Activity + cùng list ID + cùng cỡ + cùng kiểu collapsible lấy ra hiện luôn, **không xin ad mới** và banner collapsible không bung lại. Banner về muộn (rời màn lúc đang nạp) cũng được cất, không vứt. Giữ tối đa 2 banner, 55 phút.
 
 ---
 

@@ -123,6 +123,7 @@ internal fun NativeLayoutRender(
             collapseDelaySeconds = c.collapseDelaySeconds,
             collapseReshowSeconds = c.collapseReshowSeconds,
             collapseRingColor = c.collapseRingColor,
+            onCollapsed = c.onCollapsed,
         )
 
         NativeLayout.FULL -> NativeAdFullLayout(
@@ -465,6 +466,7 @@ fun NativeAdCollapsibleLayout(
     collapseDelaySeconds: Int = 0,
     collapseReshowSeconds: Int = 0,
     collapseRingColor: Color = Color.White,
+    onCollapsed: () -> Unit = {},
 ) {
     var closed by remember { mutableStateOf(false) }
     if (closed) {                                       // đã ấn mũi tên -> ẩn cả ad
@@ -528,7 +530,7 @@ fun NativeAdCollapsibleLayout(
                     modifier = Modifier.align(Alignment.TopStart).padding(6.dp),
                     ringColor = collapseRingColor,
                     progress = { closeProgress },
-                ) { closed = true }
+                ) { closed = true; onCollapsed() }
             }
 
             // ----- Hàng content + nút install -----

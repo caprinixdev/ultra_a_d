@@ -28,6 +28,7 @@ import com.google.android.libraries.ads.mobile.sdk.nativead.NativeAdLoaderCallba
 import com.google.android.libraries.ads.mobile.sdk.nativead.NativeAdRequest
 import com.gsx.googleadcompose.GoogleAds.AD_FALLBACK_DELAY_MS
 import com.gsx.googleadcompose.GoogleAds.AdCore
+import com.gsx.googleadcompose.GoogleAds.AdReusePool
 import com.gsx.googleadcompose.GoogleAds.AdUnitChain
 import com.gsx.googleadcompose.GoogleAds.AdUnitCursor
 import com.gsx.googleadcompose.GoogleAds.AdmAdDiagnostics
@@ -92,6 +93,12 @@ class AdmNativeAd internal constructor() : NativeAdEventCallback {
     /** [NativeLayout.COLLAPSIBLE]: màu vòng tròn chạy quanh mũi tên trong lúc chờ [collapseDelaySeconds]. */
     var collapseRingColor: Color = Color.White
 
+    /**
+     * [NativeLayout.COLLAPSIBLE]: người dùng vừa bấm mũi tên gập ad. Dùng hook này thay vì đoán qua chiều cao về 0 —
+     * lúc đổi từ khung chờ sang ad, view có thể cao 0 trong 1 frame, đoán theo chiều cao sẽ tưởng ad bị gập.
+     */
+    var onCollapsed: () -> Unit = {}
+
     /** Số ID dự phòng thử thêm khi ID đang dùng không có ad (chỉ khi xoay vòng, `index = -1`). */
     var maxFallbackUnits: Int = DEFAULT_MAX_FALLBACK_UNITS
 
@@ -122,6 +129,7 @@ class AdmNativeAd internal constructor() : NativeAdEventCallback {
         onImpression = {}
         onClicked = {}
         onPaid = {}
+        onCollapsed = {}
         configure()
     }
 
@@ -137,6 +145,10 @@ class AdmNativeAd internal constructor() : NativeAdEventCallback {
 
     /** Tăng mỗi lần destroy -> callback load đến sau khi đã rời màn tự huỷ ad, không đụng state cũ. */
     private var generation = 0
+
+    /** Ad đang giữ: lúc nạp + đã có impression chưa. Chưa impression mà bị huỷ -> đưa vào [NATIVE_REUSE]. */
+    private var loadedAtMs = 0L
+    private var impressed = false
     private var currentIndex: Int = -1
     private var unitId: String? = null
     private fun tag(): String = "[#$currentIndex ${unitId ?: "-"}]"
@@ -181,6 +193,7 @@ class AdmNativeAd internal constructor() : NativeAdEventCallback {
     private fun request(unit: String, chain: AdUnitChain?, attempt: Int, gen: Int, onResult: (NativeAd?) -> Unit) {
         envBlock()?.let { fail(it); onResult(null); return }
         if (unit.isBlank()) { fail(AdmErrorType.AD_ID_IS_NOT_EXIST); onResult(null); return }
+        if (attempt == 0 && adoptReused(gen, onResult)) return   // có native nạp rồi chưa hiện -> dùng, khỏi xin mới
         unitId = unit
         val startedAt = SystemClock.elapsedRealtime()
         log("loadUnit ${tag()}${if (attempt > 0) " [dự phòng $attempt]" else ""}")
@@ -195,8 +208,9 @@ class AdmNativeAd internal constructor() : NativeAdEventCallback {
             NativeAdLoader.load(request, object : NativeAdLoaderCallback {
                 // Callback đến từ thread nền -> về main: onResult đổi Compose state / AdmNativeSequenceState.
                 override fun onNativeAdLoaded(ad: NativeAd) = AdCore.onMain {
-                    if (gen != generation) {                 // đã rời màn trong lúc load -> không ai nhận ad này
-                        runCatching { ad.destroy() }
+                    if (gen != generation) {                 // đã rời màn trong lúc load -> để dành cho chỗ khác hiện
+                        log("ad về sau khi rời màn -> để dành ${tag()}")
+                        NATIVE_REUSE.put(REUSE_ANY, ad, SystemClock.elapsedRealtime())
                         return@onMain
                     }
                     log("loaded ${tag()}")
@@ -206,10 +220,7 @@ class AdmNativeAd internal constructor() : NativeAdEventCallback {
                         latencyMs = SystemClock.elapsedRealtime() - startedAt,
                         adSource = ad.getResponseInfo().adSourceName(),
                     )
-                    ad.adEventCallback = this@AdmNativeAd
-                    val previous = nativeAd
-                    nativeAd = ad
-                    if (previous !== ad) runCatching { previous?.destroy() }   // load lại: ad cũ không được bỏ rơi
+                    take(ad, SystemClock.elapsedRealtime())
                     onLoaded(ad)
                     onResult(ad)
                 }
@@ -246,6 +257,30 @@ class AdmNativeAd internal constructor() : NativeAdEventCallback {
         }
     }
 
+    /** Nhận [ad] làm ad đang giữ (vừa nạp / lấy lại từ [NATIVE_REUSE]). */
+    private fun take(ad: NativeAd, loadedAt: Long) {
+        ad.adEventCallback = this
+        val previous = nativeAd
+        nativeAd = ad
+        loadedAtMs = loadedAt
+        impressed = false
+        if (previous !== ad) runCatching { previous?.destroy() }   // load lại: ad cũ không được bỏ rơi
+    }
+
+    /** Có native nạp rồi mà chưa hiện ở đâu -> trả nó thay vì request mới. Trả true nếu đã lấy. */
+    private fun adoptReused(gen: Int, onResult: (NativeAd?) -> Unit): Boolean {
+        val e = NATIVE_REUSE.take(null, SystemClock.elapsedRealtime()) ?: return false
+        unitId = runCatching { e.ad.adUnitId }.getOrNull() ?: unitId
+        log("dùng lại native chưa hiện ${tag()}")
+        AdCore.postMain {
+            if (gen != generation) { NATIVE_REUSE.put(REUSE_ANY, e.ad, e.loadedAtMs); return@postMain }
+            take(e.ad, e.loadedAtMs)
+            onLoaded(e.ad)
+            onResult(e.ad)
+        }
+        return true
+    }
+
     /** Nhận event của ad load từ nơi khác (preload/tuần tự): gắn đúng unit id để đo doanh thu theo từng ID. */
     internal fun bindEvents(ad: NativeAd) {
         unitId = runCatching { ad.adUnitId }.getOrNull() ?: unitId
@@ -256,7 +291,11 @@ class AdmNativeAd internal constructor() : NativeAdEventCallback {
     fun destroy() {
         log("destroy ${tag()}")
         generation++
-        runCatching { nativeAd?.destroy() }
+        nativeAd?.let { ad ->
+            // Chưa có impression (màn đóng trước khi ad kịp hiện) -> để dành cho chỗ native kế, không phí.
+            if (!impressed && !isPremiumBlocked()) NATIVE_REUSE.put(REUSE_ANY, ad, loadedAtMs)
+            else runCatching { ad.destroy() }
+        }
         nativeAd = null
     }
 
@@ -264,6 +303,7 @@ class AdmNativeAd internal constructor() : NativeAdEventCallback {
 
     // Event callback đến từ thread nền -> về main trước khi gọi hook app.
     override fun onAdImpression() = AdCore.onMain {
+        impressed = true
         log("impression ${tag()}")
         report(AdmAdEventType.IMPRESSION)
         onImpression()
@@ -353,6 +393,20 @@ class AdmNativeAd internal constructor() : NativeAdEventCallback {
     companion object {
         private const val TAG = "GoogleAds/Native"
         private val CURSOR = AdUnitCursor()
+
+        private const val REUSE_ANY = ""
+
+        /**
+         * Native nạp rồi chưa hiện, dùng chung mọi chỗ native (kể cả [preload]). Google: native nên hiện trong 1 giờ
+         * kể từ lúc nạp -> giữ tối đa 55 phút.
+         */
+        internal val NATIVE_REUSE = AdReusePool<NativeAd>(maxSize = 2, ttlMs = 55L * 60 * 1000) { it.destroy() }
+
+        /** Đưa native chưa hiện vào kho dùng lại (premium thì huỷ luôn). */
+        internal fun recycle(ad: NativeAd) {
+            if (isPremiumBlocked()) runCatching { ad.destroy() }
+            else NATIVE_REUSE.put(REUSE_ANY, ad, SystemClock.elapsedRealtime())
+        }
 
         /** Lỗi có thể hết sau một lúc: đáng để slot thử lại. Premium / sai ID thì không. */
         private val RETRYABLE_ERRORS = setOf(
@@ -457,7 +511,7 @@ object AdmNativeSequenceState {
         pos = 0
         generation++
         handler.removeCallbacksAndMessages(null)
-        ready?.destroy()
+        ready?.let(AdmNativeAd::recycle)
         ready = null
         loading = false
         resolved = false
@@ -482,8 +536,8 @@ object AdmNativeSequenceState {
         val gen = generation
         Log.d(TAG, "preload pos=$pos $id")
         AdmNativeAd.preloadUnit(id) { ad ->
-            if (gen != generation) {                           // đã init lại / release trong lúc load
-                runCatching { ad?.destroy() }
+            if (gen != generation) {                           // đã init lại / release trong lúc load -> để dành
+                ad?.let(AdmNativeAd::recycle)
                 return@preloadUnit
             }
             loading = false
@@ -524,7 +578,7 @@ object AdmNativeSequenceState {
     fun release() {
         generation++
         handler.removeCallbacksAndMessages(null)
-        ready?.destroy()
+        ready?.let(AdmNativeAd::recycle)   // chưa ai hiện -> để dành cho chỗ native kế
         ready = null
         resolved = false
         isNextReady = false
