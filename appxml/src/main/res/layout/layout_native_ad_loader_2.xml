@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_gravity="center"
+    android:background="@android:color/black"
+    android:minHeight="50dp"
+    android:orientation="vertical"
+    android:scrollbars="none">
+
+    <TextView
+        android:id="@+id/ad_badge"
+        style="@style/AppTheme.AdAttribution"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"/>
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:layout_constraintTop_toBottomOf="@+id/ad_badge">
+
+
+        <com.erif.contentloader.ContentLoaderFrameLayout
+            android:id="@+id/ad_app_icon"
+            style="@style/ContentLoader.AutoStart"
+            android:layout_width="60dp"
+            android:layout_height="60dp"
+
+            android:contentDescription="@string/ok"
+            android:layout_marginBottom="15dp"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintBottom_toTopOf="@+id/ad_headline">
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/round_corner"/>
+
+        </com.erif.contentloader.ContentLoaderFrameLayout>
+
+        <com.erif.contentloader.ContentLoaderFrameLayout
+            android:id="@+id/ad_headline"
+            style="@style/ContentLoader.AutoStart"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            app:layout_constraintBottom_toTopOf="@+id/ad_body"
+            app:layout_constraintEnd_toEndOf="@+id/ad_call_to_action"
+            app:layout_constraintStart_toStartOf="@+id/ad_call_to_action" >
+
+            <TextView
+                android:background="@drawable/round_corner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+
+                android:layout_marginBottom="5dp"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:maxLines="1"
+
+                android:textColor="@android:color/white"
+                android:textSize="19sp" />
+
+        </com.erif.contentloader.ContentLoaderFrameLayout>
+
+        <com.erif.contentloader.ContentLoaderFrameLayout
+            android:id="@+id/ad_body"
+            style="@style/ContentLoader.AutoStart"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+
+            android:layout_marginBottom="15dp"
+            app:layout_constraintBottom_toTopOf="@+id/ad_call_to_action"
+            app:layout_constraintEnd_toEndOf="@+id/ad_call_to_action"
+            app:layout_constraintStart_toStartOf="@+id/ad_call_to_action" >
+
+            <TextView
+                android:background="@drawable/round_corner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+
+                android:ellipsize="end"
+                android:gravity="center"
+                android:maxLines="1"
+
+                android:textColor="@color/white"
+                android:textSize="16sp" />
+
+        </com.erif.contentloader.ContentLoaderFrameLayout>
+
+        <com.erif.contentloader.ContentLoaderFrameLayout
+            android:id="@+id/ad_call_to_action"
+            android:layout_width="0dp"
+            android:layout_height="45dp"
+            android:layout_marginStart="25dp"
+            android:layout_marginEnd="25dp"
+            android:layout_marginBottom="15dp"
+            android:gravity="center"
+            android:textAlignment="center"
+            android:textColor="@color/white"
+            android:textSize="18sp"
+            style="@style/ContentLoader.AutoStart"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent" >
+
+            <Button
+                android:background="@color/transparent"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:textAlignment="center"
+                android:textColor="@color/white"
+                android:textSize="18sp"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/round_corner"/>
+        </com.erif.contentloader.ContentLoaderFrameLayout>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

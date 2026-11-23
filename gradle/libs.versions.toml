@@ -6,6 +6,13 @@ junitVersion = "1.3.0"
 espressoCore = "3.7.0"
 lifecycleRuntimeKtx = "2.10.0"
 activityCompose = "1.13.0"
+# SDK XML (gsadutils) + app demo XML (appxml)
+# core-ktx riêng cho bản XML = 1.18.0 như 1.0.20: 1.19 bắt app dùng SDK XML lên compileSdk 37.
+xmlCoreKtx = "1.18.0"
+appcompat = "1.7.1"
+material = "1.14.0"
+activity = "1.13.0"
+constraintlayout = "2.2.1"
 kotlin = "2.4.0"
 composeBom = "2026.05.01"
 adsMobileSdk = "1.6.0"
@@ -23,6 +30,11 @@ androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "j
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+xml-androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "xmlCoreKtx" }
+androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+material = { group = "com.google.android.material", name = "material", version.ref = "material" }
+androidx-activity = { group = "androidx.activity", name = "activity", version.ref = "activity" }
+androidx-constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
 androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }

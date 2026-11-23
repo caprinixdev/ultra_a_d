@@ -19,10 +19,14 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        maven("https://jitpack.io")   // SDK XML cần com.github.eriffanani:ContentLoader
     }
 }
 
 rootProject.name = "GSXGoogleAdsCompose"
 include(":app")
 include(":GoogleAdCompose")
+// SDK bản XML (View) cho app cũ + app demo XML
+include(":gsadutils")
+include(":appxml")
  

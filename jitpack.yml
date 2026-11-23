@@ -1,4 +1,5 @@
 jdk:
   - openjdk21
 install:
-  - ./gradlew :GoogleAdCompose:publishToMavenLocal
+  # Phát hành DUY NHẤT module ghi ở gradle.properties (jitpack.module) -> com.github.caprinixdev:ultra_a_d:<tag> = 1 SDK.
+  - ./gradlew ":$(grep '^jitpack.module=' gradle.properties | cut -d= -f2 | tr -d '[:space:]'):publishToMavenLocal"

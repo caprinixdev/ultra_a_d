@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Khung màn native full story: ô ad + vòng chờ + nút skip/X + thanh progress (nút + thanh nằm NGOÀI NativeAdView -> không tính click ad). -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/story_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FF000000"
+    android:fitsSystemWindows="true">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/story_ad_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <ProgressBar
+        android:id="@+id/story_loading"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_gravity="center" />
+
+    <gs.ad.utils.ads.view.AdmCountdownButton
+        android:id="@+id/story_action"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_gravity="top|end"
+        android:layout_margin="16dp" />
+
+    <LinearLayout
+        android:id="@+id/story_bars"
+        android:layout_width="match_parent"
+        android:layout_height="8dp"
+        android:layout_gravity="bottom"
+        android:layout_marginStart="26dp"
+        android:layout_marginEnd="26dp"
+        android:layout_marginBottom="26dp"
+        android:orientation="horizontal" />
+</FrameLayout>

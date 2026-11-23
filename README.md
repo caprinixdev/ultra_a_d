@@ -1,584 +1,391 @@
-# GSX Google Ads Compose
+# GS_AD
 
-[![](https://jitpack.io/v/caprinixdev/ultra_a_d.svg)](https://jitpack.io/#caprinixdev/ultra_a_d)
+## Installation
+#### repositories
+Vào mục setting.gradle.kts. Copy:
+```gradle
+maven { url 'https://jitpack.io' }
+```
+Như hình:
+![plot](./images/Install.png)
 
-Thư viện gói **Google Mobile Ads (GMA Next-Gen SDK)**, **UMP consent** và **Google Play Billing v9** cho **Jetpack Compose**. Mọi loại ad bọc thành composable / helper: tự load, tự preload, tự destroy khi rời màn, tự chặn khi user premium hoặc offline.
 
-- Module thư viện: `:GoogleAdCompose` (package `com.gsx.googleadcompose`)
-- Module app demo: `:app`
-- `minSdk = 24`
+#### dependencies
+Cài thư viện
+```gradle
+implementation("com.github.caprinixdev:ultra_a_d:1.0.28")
+```
+Thêm các thư viện
+```gradle
+implementation ("com.google.android.gms:play-services-ads:25.5.0")
+implementation ("com.google.android.ump:user-messaging-platform:3.1.0")
 
----
+implementation ("androidx.multidex:multidex:2.0.1")
+implementation ("com.github.eriffanani:ContentLoader:1.2.0")
+implementation ("com.facebook.shimmer:shimmer:0.5.0@aar")
+implementation ("androidx.lifecycle:lifecycle-process:2.8.7")
+```
 
-## Mục lục
+## AndroidManifest
+Copy các thẻ meta vào trong application
+```manifest
+<uses-permission android: name="android.permission.ACCESS_NETWORK_STATE" />
+<uses-permission android: name="android.permission.INTERNET" />
 
-1. [Cài đặt](#1-cài-đặt)
-2. [Init UMP + Mobile Ads](#2-init-ump--mobile-ads) — **làm trước tiên**
-3. [App Open ad](#3-app-open-ad)
-4. [Native ad](#4-native-ad)
-5. [Banner ad](#5-banner-ad)
-6. [Interstitial ad](#6-interstitial-ad)
-7. [Các ad khác (Reward, Reward Interstitial)](#7-các-ad-khác)
-8. [Billing và các cái khác](#8-billing-và-các-cái-khác)
-9. [Đo fill rate và lần ra crash](#9-đo-fill-rate-và-lần-ra-crash)
+<meta-data
+     android:name="com.google.android.gms.ads.flag.OPTIMIZE_INITIALIZATION"
+     android:value="true" />
+<meta-data
+     android:name="com.google.android.gms.ads.flag.OPTIMIZE_AD_LOADING"
+     android:value="true" />
+<meta-data
+     android:name="com.google.android.gms.ads.AD_MANAGER_APP"
+     android:value="true" />
+<meta-data
+     android:name="com.google.android.gms.ads.APPLICATION_ID"
+     android:value="@string/app_ad_id" />
+<meta-data
+     android:name="com.google.android.gms.ads.flag.NATIVE_AD_DEBUGGER_ENABLED"
+     android:value="false" />
+```
 
-> **Thứ tự khởi tạo bắt buộc:** `init UMP` → ad sẵn sàng → dùng Open / Native / Banner / Inter / Reward. Mọi ad check `AdCore.isMobileAdsReady`; chưa init UMP thì báo lỗi `UMP_IS_NOT_ACTIVE`.
+## Cách sử dụng
+Tạo 1 **AppOwner.kt** như example và thêm ***<application android:name=".AppOwner"*** vào ***AndroidManifest.xml*** 
 
----
-
-## 1. Cài đặt
-
-### 1.1 Thêm dependency (JitPack)
-
-`settings.gradle.kts` — thêm repo JitPack:
-
+Phải khởi tạo UMP trước khi sử dụng Ad, nên dùng ở trong màn Splash
 ```kotlin
-dependencyResolutionManagement {
-    repositories {
-        google()
-        mavenCentral()
-        maven { url = uri("https://jitpack.io") }
+private lateinit var ump: AdmUMP
+
+ump = AdmUMP(this)
+
+ump.initUMP(gatherConsentFinished = {
+    runOnUiThread {
+        //TODO: 
+    }
+})
+```
+### BannerAd
+Gọi Load Ad:
+```kotlin
+private var bannerAd : AdmBannerAd? = null
+
+bannerAd = AdmBannerAd(id = 0, currentActivity = this) // Nếu id = -1 thì sẽ gọi vòng lặp AdmConfigAdId.listBannerAdUnitID
+bannerAd?.loadAd(binding.bannerView)
+```
+
+Listener
+```kotlin
+bannerAd?.onAdFailToLoaded = { admErrorType, errorMessage ->
+    runOnUiThread {
+        Log.d(TAG, admErrorType.name + "," + errorMessage)
     }
 }
 ```
 
-`app/build.gradle.kts`:
-
+BannerAd Lifecycle
 ```kotlin
-dependencies {
-    implementation("com.github.caprinixdev:ultra_a_d:1.0.27")
+override fun onResume() {
+     super.onResume()
+     bannerAd?.resumeBanner()
+}
+
+override fun onPause() {
+     super.onPause()
+     bannerAd?.pauseBanner()
+}
+
+override fun onDestroy() {
+    bannerAd?.destroyBanner()
+    bannerAd = null
+    super.onDestroy()
 }
 ```
 
-Đổi version sang tag release mới nhất hoặc commit hash. Xem các tag ở [JitPack](https://jitpack.io/#caprinixdev/ultra_a_d).
-
-Lib đã `api(...)` sẵn `ads.mobile.sdk` (GMA Next-Gen) + `billing.ktx`, app không cần khai báo lại.
-
-**Bật R8 cho release** (Play Console › Android vitals › *DEX code optimization*). Lib tự mang keep rule cần thiết (kể cả rule WorkManager của AdMob — thiếu là crash `Failed to create an instance of androidx.work.impl.WorkDatabase` ngay lúc mở app), app không cần thêm rule nào cho lib:
-
+Có thể sử dụng 1 list ad id riêng nếu như màn đó bị gọi nhiều lần (có thể sử dụng với tất cả các ad):
 ```kotlin
-buildTypes {
-    release {
-        optimization { enable = true }
-    }
+object GroupBannerAd {
+    var listBannerAd: HashMap<String, AdmBannerAd?> = HashMap()
+}
+
+val keyAd = this.javaClass.simpleName
+if(GroupBannerAd.listBannerAd[keyAd] == null){
+    bannerAd = AdmBannerAd(0, this, resources.getStringArray(R.array.banner_ad_main2_unit_id).toList())
+    GroupBannerAd.listBannerAd[keyAd] = bannerAd
+}else{
+    bannerAd = GroupBannerAd.listBannerAd[keyAd]
 }
 ```
 
-Mọi hook (`onLoaded`, `onDismissed`, `onError`, `onPaid`, `onReward`...) chạy trên **main thread** — gọi navigate/toast/đổi state thẳng trong hook được.
-
-### 1.2 AdMob App ID trong manifest
-
-`AndroidManifest.xml` của app (UMP và Mobile Ads đều cần):
-
-```xml
-<application android:name=".App">
-    <meta-data
-        android:name="com.google.android.gms.ads.APPLICATION_ID"
-        android:value="YOUR_APPLICATION_ID" />
-</application>
-```
-
-> `Prefs` tự init qua một `ContentProvider` của lib **trước** `Application.onCreate` — app **không** cần gọi tay.
-
-### 1.3 Cấp ad unit id
-
-Set ID trong `Application.onCreate` (đọc từ `keys.xml` hay backend tuỳ ý):
-
+### NativeAd
+Gọi Load Ad:
 ```kotlin
-class App : Application() {
-    override fun onCreate() {
-        super.onCreate()
+private var nativeAd: AdmNativeAd? = null
 
-        AdmConfigAdId.listBannerAdUnitID             = resources.getStringArray(R.array.banner_ad_units).toList()
-        AdmConfigAdId.listInterstitialAdUnitID       = resources.getStringArray(R.array.interstitial_ad_units).toList()
-        AdmConfigAdId.listRewardAdUnitID             = resources.getStringArray(R.array.rewarded_ad_units).toList()
-        AdmConfigAdId.listRewardInterstitialAdUnitID = resources.getStringArray(R.array.rewarded_interstitial_ad_units).toList()
-        AdmConfigAdId.listNativeAdUnitID             = resources.getStringArray(R.array.native_ad_units).toList()
-        AdmConfigAdId.listOpenAdUnitID               = resources.getStringArray(R.array.app_open_ad_units).toList()
-    }
-}
+nativeAd = AdmNativeAd(id = 0, context = applicationContext, isFullScreen = false) // Nếu id = -1 thì sẽ gọi vòng lặp AdmConfigAdId.listNativeAdUnitID
+nativeAd?.loadAd(binding.nativeAdContainerView, R.layout.layout_native_ad)
 ```
-
-Mỗi list nhiều ID → lib **xoay vòng** mỗi lần load. Mọi hàm load/show nhận `index`:
-- `index = -1` → xoay vòng (mặc định). ID đang dùng báo không có ad hoặc lỗi → tự thử ID kế trong list, tối đa `maxFallbackUnits` ID dự phòng (mặc định 2, ID trùng bị bỏ qua). Timeout thì không thử ID khác.
-- `index >= 0` → chọn cụ thể id thứ `index` (0-based), không dự phòng
-- `customIds = listOf(...)` → xoay vòng list id truyền riêng thay cho list trong `AdmConfigAdId`
-
-> **Đừng gọi thẳng `NativeAdLoader.load` / `InterstitialAd.load`... trong app.** SDK ném `IllegalStateException` nếu chưa init. Composable và helper của lib đã tự kiểm tra `AdCore.isMobileAdsReady`.
-
----
-
-## 2. Init UMP + Mobile Ads
-
-**Bước đầu tiên, làm ở splash.** Xin consent (UMP) trước, init Mobile Ads SDK chỉ khi consent cho phép.
-
+Dùng Preload Ad thì tạo 1 object list và dùng populateNativeAdView:
 ```kotlin
-@Composable
-fun SplashScreen(onDone: () -> Unit) {
-    val ump = AdmUMP()   // tự lấy Activity an toàn từ context Compose
-
-    LaunchedEffect(Unit) {
-        ump.initUMP(
-            // ads SẴN sàng -> preload native/open sớm (khỏi poll)
-            onAdsInitialized = {
-                AdmNativeSequenceState.init(listOf(0, 1, 2, 3, 4))
-            },
-            // xong việc xin consent -> rời splash, vào app
-            gatherConsentFinished = { onDone() },
-        )
-    }
-}
-```
-
-`initUMP(...)`:
-- `testDeviceHashedIds: List<String>` — device test cho consent form.
-- `showNetworkErrorDialog: Boolean = true` — offline thì người dùng miễn phí gặp dialog chỉ có Retry, có mạng mới đi tiếp; người đã mua chạy tiếp luôn (xem `OfflineGate` ở mục 8). `false` thì bỏ dialog ở bước này.
-- `onAdsInitialized` — bắn khi Mobile Ads init xong (ads sẵn sàng → lúc preload).
-- `gatherConsentFinished` — bắn đúng 1 lần khi xong xin consent (form đóng / không cần / lỗi / UMP quá `consentUpdateTimeoutMs`, mặc định 8s) → **lúc rời splash**. Init ad chạy nền song song, không block callback này.
-
-Privacy options (xin lại consent trong Settings):
-
-```kotlin
-val ump = AdmUMP()
-if (ump.isPrivacyOptionsRequired) {
-    Button(onClick = { ump.showPrivacyOptionsForm() }) { Text("Privacy options") }
-}
-```
-
-> Sau bước này `AdCore.isMobileAdsReady = true`; mọi ad bên dưới mới chạy được.
-
----
-
-## 3. App Open ad
-
-Nạp từng ad một (`AppOpenAd.load`), giữ tối đa 1 ad, show 1 lần rồi bỏ, không dialog loading. Show xong **không nạp bù**: từ 1.0.26 bỏ `AppOpenAdPreloader`, vì preloader tự nạp lại sau mỗi lần show (ad nạp sau splash bị vứt khi màn splash huỷ instance) và nạp ngay lúc bật resume, làm show rate App Open tụt. Ad giữ quá `adTtlMs` (mặc định 3 giờ 55 phút) thì bỏ.
-
-**Ad không ai dùng được để dành (từ 1.0.27).** Splash hết `timeoutMs` rồi ad mới về, hoặc màn splash đóng (instance bị destroy) lúc ad đang về: trước đây ad đó bị huỷ, mỗi lần như vậy là một matched request không có impression, gần như mỗi lần mở app trên mạng chậm. Giờ SDK để dành ad đó (tối đa 1 ad cho cả app), và instance resume lấy ra show ở lần quay lại app kế tiếp thay vì xin ad mới. Instance nào cũng lấy ad để dành trước khi xin ad mới. App không cần sửa gì. Ad để dành có thể thuộc ad unit khác (ad unit splash hiện ở chỗ resume); app muốn tách bạch ad unit theo chỗ đặt thì đặt `keepUnusedAd = false` trên instance. Mua premium thì ad để dành bị huỷ.
-
-Hai cách dùng:
-
-### 3.1 Resume — tự show khi app trở lại foreground
-
-Gọi 1 lần trong `Application.onCreate`. Bỏ qua ON_START đầu (cold start để splash lo):
-
-```kotlin
-class App : Application() {
-    override fun onCreate() {
-        super.onCreate()
-        // ... set ad id, init billing ...
-
-        GlobalVariables.canShowOpenAd = true   // premium -> tự set false
-        AdmOpenResume.start()                  // hoặc start { onPaid = { v -> track(v) } }
-    }
-}
-```
-
-Ad được nạp lúc app **xuống nền** (ON_STOP), nên lúc người dùng quay lại (ON_START) là có ad; quay lại nhanh quá chưa nạp kịp thì bỏ lần đó, không show trễ (ad về sau giữ cho lần quay lại kế). Không nạp ngay lúc bật, không nạp bù sau khi show. Lúc xuống nền và lúc quay lại đều kiểm tra `GlobalVariables.canShowOpenAd`; lúc show kiểm tra thêm `isShowPopup` (mutex full-screen).
-
-Tuỳ chỉnh: `minResumeIntervalMs` (khoảng cách tối thiểu giữa 2 lần show, mặc định 0) · `skipResumeAfterAdClick` (user rời app do bấm ad thì lúc quay lại không show thêm, mặc định `true`) · `keepUnusedAd` (xem trên, mặc định `true`).
-
-**Show rate cao — nạp lúc quay lại (kiểu SDK 1.0.21 bản XML, từ 1.0.27).** Cách nạp sẵn ở trên luôn phí ad của lần xuống nền cuối phiên: người dùng thoát hẳn, process chết, ad chưa bao giờ hiện, nên show rate App Open chỉ khoảng 15–25%. Bản XML 1.0.21 cho app gọi `loadAds(isShowAd = true)` lúc quay lại (chưa có ad thì mới nạp, nạp xong hiện luôn). Bật lại cách đó:
-
-```kotlin
-AdmOpenResume.start {
-    loadOnReturn = true        // không nạp lúc xuống nền; quay lại mới nạp rồi show
-    returnWaitMs = 5_000       // chờ tối đa; quá thì bỏ lượt này, ad về sau để dành cho lần quay lại kế
-    returnShowsLoading = true  // dialog "Loading..." lúc chờ (bấm Back = thôi chờ). false = ad tự bật lên như 1.0.21
-    loadingText = "Loading..."
-}
-```
-
-Quay lại mà đã có ad (ad splash về muộn được để dành, ad lần trước về sau khi hết giờ chờ) thì show ngay, không dialog. Mọi ad đều nạp đúng lúc sắp show, nên gần như không ad nào phí. Đổi lại, lần quay lại chưa có ad người dùng phải chờ 1–3 giây. `loadOnReturn` được đọc mỗi lần quay lại, nên có thể bật/tắt bằng Remote Config.
-
-### 3.2 Splash — cold start load + show ngay
-
-Instance riêng cho splash, tự destroy khi rời màn:
-
-```kotlin
-@Composable
-fun SplashScreen(onDone: () -> Unit) {
-    val openSplash = AdmOpen()   // helper -> AdmOpenAd, tự destroy
-    val openIds = stringArrayResource(R.array.app_open_ad_units_custom).toList()
-
-    // gọi khi giá/consent đã sẵn -> show open rồi vào app
-    LaunchedEffect(ready) {
-        if (ready) openSplash.showFromSplash(customIds = openIds) { onDone() }
-    }
-}
-```
-
-`showFromSplash(index, customIds, timeoutMs = 8000, onClosed)`: `onClosed` bắn **1 lần** khi ad đóng / lỗi / quá timeout → splash đi tiếp. Mobile Ads chưa init xong thì tự chờ trong `timeoutMs`; offline hoặc consent không cho phép thì `onClosed` ngay. Gọi sau khi consent xong (`gatherConsentFinished`), để không rời splash lúc form consent còn mở.
-
-Hook: `onShowed` / `onDismissed` / `onClicked` / `onImpression` / `onPaid(AdValue)` / `onError(AdmErrorType)`.
-
----
-
-## 4. Native ad
-
-`NativeAdLoader.load` → render asset qua `NativeAdView` wrapper. Layout dựng sẵn: `NativeLayout.NORMAL`, `SMALL`, `SMALL_2`, `COLLAPSIBLE`, `FULL`.
-
-`COLLAPSIBLE`: media + hàng icon/nút, mũi tên góc trên trái — ấn → ẩn **cả ad** luôn (mặc định không mở lại).
-
-```kotlin
-AdmNative(layout = NativeLayout.COLLAPSIBLE, index = -1) {
-    collapseDelaySeconds = 3    // 3 giây đầu mũi tên mờ + vòng tròn chạy quanh nút, đủ vòng mới ấn được
-    collapseReshowSeconds = 30  // ấn mũi tên xong, 30 giây sau ad tự hiện lại (cùng ad đó)
-    collapseRingColor = Color.White   // màu vòng tròn chạy quanh nút (mặc định trắng)
-}
-```
-
-`collapseDelaySeconds` mặc định `0` (ấn được ngay). Đếm từ lúc ad hiện; dùng được cả với `AdmNativeSequence`.
-
-`collapseReshowSeconds` mặc định `0` (ẩn hẳn). Hiện lại là **cùng ad cũ**, không load mới; `collapseDelaySeconds` đếm lại từ đầu.
-
-`onCollapsed = { ... }` (từ 1.0.27): báo đúng lúc người dùng bấm mũi tên gập. Dùng hook này thay vì đoán qua chiều cao về 0 — lúc đổi shimmer sang ad, view có thể cao 0 trong 1 frame.
-
-> **Native chưa hiện được dùng lại (từ 1.0.27).** Native nạp xong mà chưa có impression — màn đóng khi ad đang về, `AdmNative` rời màn trước khi ad kịp hiện, onboarding (`AdmNativeSequenceState`) bị bỏ dở, story native full đóng sớm — không bị huỷ nữa mà vào kho dùng chung (tối đa 2 ad, 55 phút). Lần nạp native kế (kể cả `AdmNativeAd.preload`) lấy ad trong kho trước khi xin ad mới. Trước đây mỗi ad như vậy là 1 matched request không có impression → tụt show rate.
-
-### 4.1 Tự load (đơn giản nhất)
-
-```kotlin
-AdmNative(Modifier.fillMaxWidth(), layout = NativeLayout.NORMAL, index = -1) {
-    backgroundColor = Color(0xFF222222)
-    ctaColor = Color(0xFFFF6D00)
-    onError = { type -> Log.w("ad", "$type") }
-}
-```
-
-Chờ load → shimmer; premium → render rỗng.
-
-Slot không bỏ cuộc ngay:
-- ID không có ad → thử ID dự phòng (`maxFallbackUnits`, mặc định 2). Khi list xếp floor cao → thấp, đặt `startFromFirstUnit = true` để luôn thử từ đầu.
-- SDK chưa init xong → chờ, init xong tự load.
-- Vẫn hụt hoặc mất mạng → slot trống, thử lại theo `retryDelaysMs` (mặc định sau 15s và 45s nữa) khi app đang hiện. Hết lượt mới gọi `onError`, nên app đừng ẩn slot trước đó. Đặt `retryDelaysMs = emptyList()` nếu không muốn ad hiện muộn làm dịch nội dung, ví dụ slot nằm giữa danh sách.
-
-> **Layout tự vẽ:** nút CTA trong `NativeAdCallToActionView` chỉ dùng `Box` + `Text`. Đừng dùng `Button` hay `clickable`: Compose nuốt lượt chạm, SDK không nhận click, ad có impression mà bấm nút không ăn.
-
-### 4.2 Preload rồi show (app sở hữu ad)
-
-```kotlin
-// preload (vd Application/màn trước)
-AdmNativeAd.preload { ad -> ad?.let { cache["home"] = it } }
-
-// show
-AdmNative(Modifier.fillMaxWidth(), nativeAd = cache["home"])   // null -> skip
-```
-
-> Ad preload do **app sở hữu** → tự gọi `ad.destroy()` khi xong, hoặc truyền `destroyNativeAdOnDispose = true` để ad được huỷ khi rời màn. Mỗi native giữ 1 WebView, quên huỷ sẽ tốn bộ nhớ dần theo số lần vào màn.
-
-> **Chỉ preload cho lần show chắc chắn tới.** Ad nạp mà không hiện vẫn tính là matched request, kéo show rate xuống (Mesh: mỗi chỗ đặt tự nạp sẵn 1 cái "cho lần sau" -> native 52–62%). Đừng nạp sẵn "cho lần sau" ở mọi chỗ đặt; nếu cần, giữ **một** ad dự phòng chung cho cả app và chỉ nạp cho màn người dùng hay quay lại. Ad giữ quá ~1 giờ thì bỏ (hết hạn, hiện ra không được tính).
-
-### 4.3 Native tuần tự (onboarding nhiều trang)
-
-Preload theo thứ tự, luôn giữ sẵn 1 ad cho lần show kế:
-
-```kotlin
-// init 1 lần (Splash/Application), list INDEX vào listNativeAdUnitID
-AdmNativeSequenceState.init(listOf(0, 1, 2))
-
-// mỗi trang cần native -> show id kế + preload tiếp
-AdmNativeSequence(
-    Modifier.fillMaxWidth(),
-    active = page == pager.currentPage,   // trong Pager: chỉ consume trang đang hiện
-) { ctaColor = Color(0xFF52DE11) }
-
-// rời hẳn onboarding -> dọn buffer
-AdmNativeSequenceState.release()
-```
-
-Màu layout config được: `backgroundColor`, `ctaColor`, `ctaTextColor`, `textColor`, `subTextColor`, `startMuted`.
-
-### 4.4 Native full sau inter (2 thanh loading)
-
-Media phủ trên, card tối đè đáy (icon + tên + badge Ad, body, nút CTA), 2 thanh nằm trong card dưới CTA, mỗi thanh chạy `stepMs` (5s). Nút tròn góc trên phải mờ + vòng đếm lùi: hết thanh 1 → mũi tên **skip** bấm được; hết thanh 2 → **X** bấm được. Back bị chặn tới lúc tắt được.
-
-```kotlin
-val storyAds = remember { mutableStateListOf<NativeAd?>(null, null) }
-var withNativeFull by remember { mutableStateOf(false) }   // true -> đóng inter hiện native full
-var showStory by remember { mutableStateOf(false) }
-val inter = AdmSharedInterstitial.get().apply {
-    // nạp 2 native LÚC INTER VỪA HIỆN — inter đứng trên màn vài giây, thừa thời gian cho native về
-    onShowed = { if (withNativeFull) storyAds.indices.forEach { i -> AdmNativeAd.preload { storyAds[i] = it } } }
+//preload
+object GroupNativeAd {
+    var listOnBoardNativeAd: MutableList<AdmNativeAd?> = mutableListOf()
 }
 
-inter.show { shown -> if (shown && withNativeFull) showStory = true else goNext() }
+val admNativeAd = AdmNativeAd(
+    id = 0,
+    context = applicationContext,
+    isFullScreen = false // true
+)
 
-if (showStory) AdmNativeFullStory(nativeAds = storyAds, onClose = { showStory = false /* + destroy ads */ })
-```
+admNativeAd.tag = 0 //để nhận biết ad
 
-> Đừng preload native story cùng lúc `inter.load()`: inter nạp mà không bao giờ hiện thì 2 native đi kèm cũng bị vứt — mỗi lần là thêm matched request không có lượt hiện.
+GroupNativeAd.listOnBoardNativeAd.add(admNativeAd)
 
-`nativeAds = null` → tự load `adsToLoad` ad (mặc định bằng `pages`) và tự destroy. **Show rate cao: `adsToLoad = 1`** (hoặc preload 1 ad thay vì 2 ở ví dụ trên) — cả story một ad, trang 2 dùng lại. Ad thứ hai hay về muộn hoặc người dùng thoát trước trang 2, ad đó không bao giờ lên màn (đo ở Mesh: 10 ad nạp / 5 lượt hiện). Ad của trang null → mượn ad khác trong list; không có ad nào → báo `onError` đúng 1 lần rồi `onClose`. Vì cả hai đều được gọi, nếu đóng màn trong cả hai thì phải có chốt để chỉ đóng 1 lần.
-
-### 4.5 Native PIP (nổi, kéo thả)
-
-Card 225x238dp nổi ở `corner` (mặc định góc trên phải, cách lề 10dp), trượt vào từ mép. Kéo → đi theo tay, thả → hít về góc gần nhất. 1s đầu chặn chạm; nút X góc trên trái khoá 3s (vòng cam). Bấm ad → load ad mới (`reloadOnClick`).
-
-```kotlin
-Box(Modifier.fillMaxSize()) {
-    ScreenContent()
-    AdmNativePip(Modifier.fillMaxSize(), corner = PipCorner.TOP_RIGHT, onClose = { })   // con CUỐI -> nổi trên cùng
-}
-```
-
----
-
-## 5. Banner ad
-
-`BannerAd.load` (suspend) → render trong `AndroidView`. Composable tự load / fill / destroy.
-
-```kotlin
-AdmBanner(Modifier.fillMaxWidth())                       // mặc định: ADAPTIVE anchored full-width
-
-AdmBanner(Modifier.fillMaxWidth()) {                     // tuỳ biến
-    size = AdmBannerSize.MEDIUM_RECTANGLE
-    collapsible = AdmBannerCollapsible.BOTTOM
-    onPaid = { v -> track(v) }
-    onError = { type -> Log.w("ad", "$type") }
-}
-```
-
-`size`: `ADAPTIVE` (mặc định, thay smart_banner) · `ADAPTIVE_LARGE` · `BANNER` (320x50) · `FULL_BANNER` · `LARGE_BANNER` · `LEADERBOARD` · `MEDIUM_RECTANGLE` (300x250).
-
-`collapsible`: `NONE` / `TOP` / `BOTTOM` — chỉ chạy với size anchored adaptive (size khác tự ép về `ADAPTIVE`).
-
-Đổi `size`/`collapsible` → tự reload. Đang load → shimmer. Premium/offline → render rỗng.
-
-> **Banner được giữ lại khi rời màn (từ 1.0.27)**, như `GroupBannerAd` của bản XML: `AdmBanner` rời màn (hoặc đổi cỡ) thì banner được cất lại; `AdmBanner` kế cùng Activity + cùng list ID + cùng cỡ + cùng kiểu collapsible lấy ra hiện luôn, **không xin ad mới** và banner collapsible không bung lại. Banner về muộn (rời màn lúc đang nạp) cũng được cất, không vứt. Giữ tối đa 2 banner, 55 phút.
-
----
-
-## 6. Interstitial ad
-
-One-shot `InterstitialAd.load`: load đúng 1 ad giữ sẵn, show 1 lần rồi bỏ (không tự refill). `show` khi ad sẵn thì hiện dialog ngắn rồi show, chưa kịp load thì dialog chờ load xong tự show (quá timeout hoặc bấm Back → báo lỗi). Cần show lại → `load`/`show` lần nữa.
-
-> **Show rate = lượt hiện ÷ ad nạp được.** Ad nạp mà không hiện (rời màn, lượt chưa tới hạn) kéo show rate xuống và mạng quảng cáo có thể hạ giá. Từ 1.0.22 bản này bỏ `countToShowAds` (bản 1.0.20 chỉ nạp khi tới lượt hiện) và README cũ hướng dẫn mỗi màn tự tạo inter rồi `load()` lúc vào màn — app làm theo thì show rate inter chỉ còn 17–40%. Dùng **6.1**.
-
-### 6.1 Inter dùng chung + đếm lượt (khuyên dùng)
-
-`AdmSharedInterstitial` — một instance sống suốt process, không chết theo màn: ad nạp ở màn này hiện ở màn khác, cả phiên phí nhiều nhất 1 ad. Đếm lượt như `countToShowAds` bản 1.0.20 (lưu qua các lần mở app).
-
-```kotlin
-val inter = AdmSharedInterstitial.get()      // 1 cái cho cả app; gọi ở đâu cũng ra cùng instance
-
-// hook cả app, gắn 1 lần (vd Application / MainActivity)
-inter.onPaid = { v -> track(v) }
-inter.onLoadFailed = { type -> log(type) }
-
-// --- Hiện theo lượt: lượt 1, 3, 5... (startAds = 1, loopAds = 2) ---
-// vào màn có nút: chỉ nạp khi lượt bấm KẾ TIẾP sẽ hiện ad
-LaunchedEffect(Unit) { inter.preloadIfDue("inter_editor_back", startAds = 1, loopAds = 2) }
-// bấm: đếm lượt, tới hạn thì hiện; onDone luôn được gọi đúng 1 lần
-BackHandler { inter.countToShow(keyCounterAd = "inter_editor_back", startAds = 1, loopAds = 2) { shown -> goBack() } }
-
-// --- Lần nào cũng hiện ---
-LaunchedEffect(Unit) { inter.load() }                       // đã có / đang nạp -> bỏ qua
-Button(onClick = { inter.show { shown -> goNext() } }) { Text("Xong") }
-```
-
-- `onDone(shown)` được gọi **đúng 1 lần**, trên main, kể cả khi không hiện (premium, chưa có ad, full-screen khác đang hiện, đang có lượt khác) → **luôn đi tiếp trong `onDone`**.
-- Hook cả app: `onAvailable` · `onLoadFailed` · `onShowed` · `onImpression` · `onClicked` · `onPaid`. Đừng gán hook của `inter.ad`.
-- Tuỳ chỉnh qua `inter.ad` (bảng dưới), vd `inter.ad.waitWhenNotReady = false`.
-- Placement phải dùng unit riêng → instance riêng: `AdmSharedInterstitial.get("splash")` + `index`.
-- User vừa mua premium → `AdmSharedInterstitial.clearAll()` bỏ ad đang giữ.
-
-**Show rate cao nhất — không nạp sẵn (như `showPopupLoadAds` bản XML 1.0.21).** Nạp sẵn (`load()` / `preloadIfDue()`) luôn để thừa 1 ad cuối phiên nên show rate kẹt ở khoảng N/(N+1) (phiên hiện 2 inter → 67%, 4 inter → 80%). Bỏ hẳn `load()` / `preloadIfDue()`, chỉ gọi `show` / `countToShow`: chưa có ad thì SDK nạp và chờ với dialog "Loading…" (tối đa `inter.ad.loadTimeoutMs`, mặc định 8 s), về muộn thì giữ cho lượt sau. Ad nào nạp cũng hiện, đổi lại mỗi lượt người dùng chờ 1–3 giây.
-
-### 6.2 Inter riêng cho một màn
-
-`AdmInterstitial { }` tạo instance theo màn, **rời màn là huỷ cả ad đã nạp**. Chỉ dùng khi màn đó chắc chắn hiện ad mỗi lần vào (vd splash chờ ad rồi hiện ngay); inter ở nhiều màn hay hiện theo lượt → 6.1.
-
-```kotlin
-val inter = AdmInterstitial {        // helper -> AdmInterstitialAd, tự destroy khi rời màn
-    onError = { type -> toast("$type") }
-    onDismissed = { goNext() }        // ad đóng -> đi tiếp
-}
-
-Button(onClick = { inter.show() }) { Text("Show") }   // chưa nạp -> dialog chờ nạp rồi hiện
-```
-
-Tuỳ chỉnh (cả `AdmInterstitial` lẫn `AdmSharedInterstitial.ad`):
-
-| Thuộc tính | Mặc định | Ý nghĩa |
-|---|---|---|
-| `loadingText` | `"Loading..."` | Chữ trên dialog |
-| `loadTimeoutMs` | 8s | Ad chưa sẵn thì chờ tối đa ngần này |
-| `showDelayMs` | 2s | Dialog trước khi show ad đã sẵn |
-| `waitWhenNotReady` | `true` | `false` → ad chưa sẵn thì báo lỗi ngay, không bắt user chờ, ad load tiếp cho lần sau. Nên dùng cho placement không quan trọng |
-| `maxFallbackUnits` | 2 | Số ID dự phòng khi không có ad |
-| `failCooldownMs` | 15s | Vừa load hụt thì trong ngần này không request lại, `show` báo lỗi ngay |
-| `adTtlMs` | 55 phút | Ad giữ quá lâu thì bỏ, load cái mới |
-
-Hook: `onAvailable` / `onLoadFailed` / `onShowed` / `onImpression` / `onClicked` / `onPaid` / `onDismissed` / `onComplete` / `onError`. `onLoadFailed` báo mọi lượt nạp hỏng, kể cả lúc không ai chờ show; `onError` chỉ báo lỗi nạp khi đang có show chờ.
-
-> Mutex `GlobalVariables.isShowPopup` chặn 2 full-screen đè nhau. Double-tap show → bỏ qua. Ad full-screen khác đang hiện → `onError(AD_IS_EXISTED)`. App xuống nền trước lúc show → giữ ad, `onError(ACTIVITY_IS_NOT_AVAILABLE)`. **Luôn đi tiếp trong cả `onDismissed` lẫn `onError`**, không thì màn sẽ đứng.
-
-### 6.3 Hai kiểu show inter
-
-1. **Inter thường** — đóng inter là đi tiếp.
-2. **Inter + native full** — đóng inter → hiện [native full 2 thanh loading](#44-native-full-sau-inter-2-thanh-loading). Native nạp trong `onShowed` của inter.
-
-```kotlin
-Button(onClick = { withNativeFull = false; inter.show { goNext() } }) { Text("Inter thường") }
-Button(onClick = { withNativeFull = true; inter.show { shown -> if (shown) showStory = true else goNext() } }) { Text("Inter + native full") }
-```
-
-Demo đầy đủ: `app/.../interstitial/InterstitialScreen.kt`.
-
----
-
-## 7. Các ad khác
-
-API y hệt Interstitial, thêm `onReward`.
-
-### 7.1 Rewarded
-
-```kotlin
-val reward = AdmReward {
-    onReward = { item -> grant(item.amount) }
-    onError  = { type -> toast("$type") }
-}
-LaunchedEffect(Unit) { reward.load() }
-Button(onClick = { reward.show() }) { Text("Watch & earn") }
-```
-
-### 7.2 Rewarded Interstitial
-
-```kotlin
-val ad = AdmRewardInterstitial {
-    onReward = { item -> grant(item.amount) }
-    onError  = { type -> toast("$type") }
-}
-ad.load()
-ad.show()
-```
-
-Unit id lấy từ `listRewardAdUnitID` / `listRewardInterstitialAdUnitID`.
-
----
-
-## 8. Billing và các cái khác
-
-### 8.1 Init billing (Application)
-
-```kotlin
-object MyProducts {
-    val subscriptions = listOf("app.weekly", "app.yearly")
-    val nonConsumable = listOf("lifetime")
-}
-
-class App : Application() {
-    override fun onCreate() {
-        super.onCreate()
-        BillingClient.init(
-            context = this,
-            nonConsumableIds = MyProducts.nonConsumable,
-            subscriptionIds  = MyProducts.subscriptions,
-            // consumableIds = ...,            // nếu có
-            // autoRefreshOnForeground = true  // mặc định: tự connect + restore mỗi foreground
-        )
-        BillingClient.startConnection()
-    }
-}
-```
-
-> Mỗi product ID chỉ được xuất hiện **1 lần** giữa các list (route đúng consume/acknowledge). `autoRefreshOnForeground = true` → app **không** cần tự gọi `startConnection`/`restorePurchases`.
-
-**Offline:** người dùng miễn phí cần mạng để có quảng cáo, nên `OfflineGate` hiện dialog Retry không tắt được lúc mở app và mỗi lần quay lại foreground. Người đã mua (sub, lifetime, remove-ads) dùng offline bình thường, restore lỗi thì giữ nguyên quyền đã lưu. Tắt mạng giữa lúc đang dùng thì chưa chặn, để sóng chập chờn không làm hộp thoại nhảy ra giữa chừng.
-
-- Muốn người dùng miễn phí cũng dùng được offline: `OfflineGate.enabled = false`.
-- App có billing riêng phải báo cho SDK biết ai đã mua: `PreferencesManager.getInstance().removeAds(isPro)`.
-
-### 8.2 Mua / sub / restore trong Compose
-
-```kotlin
-val billing = BillingAction()    // tự lấy Activity, không cần truyền tay
-
-Button(onClick = { billing.subscribe(MyProducts.YEARLY) }) {
-    Text("Yearly ${billing.getPrice(MyProducts.YEARLY) ?: "..."}")
-}
-Button(onClick = { billing.purchase(MyProducts.LIFETIME) }) { Text("Lifetime") }
-Button(onClick = { billing.restore() }) { Text("Restore") }
-```
-
-`ComposeBilling`: `purchase` · `subscribe` · `changeSubscription` (upgrade/downgrade) · `restore` · `getOffers` · `getPrice` · `hasFreeTrial` · `getFreeTrialPeriod`.
-
-### 8.3 Lắng nghe billing event
-
-```kotlin
-BillingEvents(
-    onProductsFetched = { products -> /* render giá */ },
-    onPurchased       = { ids -> toast("Đã mua $ids") },
-    onRestoreFinished = { has -> toast(if (has) "Đã khôi phục" else "Không có gói") },
-    onError           = { type, _ -> Log.w("billing", "$type") },
+//populateNativeAdView
+val nativeAd = GroupNativeAd.listOnBoardNativeAd[position]
+nativeAd?.populateNativeAdView(
+    adContainerView = adContainer,
+    layoutNativeAdView = R.layout.layout_native_ad_full
 )
 ```
 
-### 8.4 Trạng thái premium
-
+Listener
 ```kotlin
-val premium by rememberPremiumState()   // lifetime || sub || removeAds, reactive
-if (premium) { /* ẩn ad, hiện badge */ }
-
-// hoặc đọc thẳng:
-PreferencesManager.getInstance().isSUB()        // có sub/lifetime
-PreferencesManager.getInstance().isRemoveAds()  // remove-ads
-```
-
-Premium → lib tự set `GlobalVariables.isShowSub = false` + `canShowOpenAd = false`, mọi ad tự báo `CLIENT_HAVE_SUB` / `CLIENT_HAVE_BEEN_REMOVED_AD` và **không render**. Remove-ads do app tự cấp: `BillingClient.setRemoveAds(true)`.
-
----
-
-## 9. Đo fill rate và lần ra crash
-
-`AdmAdDiagnostics.listener` nhận mọi sự kiện của mọi format, kèm mã lỗi gốc của SDK (`NO_FILL`, `NETWORK_ERROR`...), nguồn trả ad, độ trễ và ID dự phòng. Gắn 1 lần trong `Application.onCreate`:
-
-```kotlin
-AdmAdDiagnostics.listener = { e ->
-    // Crash do ad: biết ngay ad nào đang chạy lúc crash.
-    FirebaseCrashlytics.getInstance().setCustomKey("last_ad", "${e.format} ${e.type} ${e.adSource}")
-
-    // Fill rate theo từng ID = LOAD_SUCCESS / LOAD_REQUEST. Show rate = SHOW_SUCCESS / LOAD_SUCCESS.
-    analytics.logEvent("ad_${e.type.name.lowercase()}", bundleOf(
-        "format" to e.format.name,
-        "unit" to e.adUnitId,
-        "error" to e.errorCode,
-        "source" to e.adSource,
-        "latency_ms" to e.latencyMs,
-    ))
+nativeAd?.onAdFailToLoaded = { admErrorType, errorMessage ->
+    runOnUiThread {
+        Log.d(TAG, admErrorType.name + "," + errorMessage)
+    }
 }
 ```
 
-Listener chạy trên main thread, lỗi trong listener bị nuốt, không làm crash app. Doanh thu nằm trong sự kiện `PAID` (`valueMicros`, `currencyCode`).
-
-### Máy yếu
-
-`AdmDevice.isLowEnd` = máy Android Go hoặc RAM dưới 3200 MB. Google chấm ANR riêng từng dòng máy (ngưỡng 8%), nên bớt ad nặng trên máy yếu giúp dòng máy đó không vượt ngưỡng:
-
+Destroy Ad
 ```kotlin
-val allowPip = !AdmDevice.isLowEnd && firebase.adsPlacementEnabled(pos)
+override fun onDestroy() {
+    //destroy list
+    val list = GroupNativeAd.listOnBoardNativeAd
+
+    list.forEachIndexed { index, admNativeAd ->
+        admNativeAd?.destroyNativeAd()
+        list[index] = null
+    }
+
+    list.clear()
+    
+    //destroy nativeAd
+    nativeAd?.destroyNativeAd()
+    nativeAd = null
+    super.onDestroy()
+}
 ```
 
-Trên máy yếu, lib tự dùng shimmer tĩnh. Việc tắt format nào là lựa chọn doanh thu của từng app, lib không tự tắt.
+### Native collapsible (1.0.28)
+Media + hàng icon/chữ/nút cài đặt, mũi tên gập góc trên trái. Bấm mũi tên -> ẩn cả ad (mũi tên không tính click ad).
+```kotlin
+private var collapsible: AdmNativeCollapsible? = null
 
----
+collapsible = AdmNativeCollapsible(-1, this).apply {
+    collapseDelaySeconds = 3     // 3 giây đầu mũi tên mờ + vòng chạy quanh nút, chưa bấm được
+    collapseReshowSeconds = 30   // gập xong 30 giây ad tự hiện lại (cùng ad). 0 = ẩn hẳn
+    onCollapsed = { tag -> }     // người dùng vừa bấm mũi tên
+    loadAd(binding.containerNativeCollapsible)   // ConstraintLayout, cao wrap_content
+}
 
-## Tham khảo nhanh
+override fun onDestroy() {
+    collapsible?.destroy()
+    super.onDestroy()
+}
+```
+Layout mặc định `layout_native_ad_collapsible`. Tự làm layout: giữ các id `ad_*` + 1 `gs.ad.utils.ads.view.AdmCountdownButton` id `ad_collapse`, rồi `loadAd(container, R.layout.my_layout)`.
 
-### `AdmErrorType`
+### Native full sau inter — 2 thanh loading (1.0.28)
+Toàn màn hình, 2 trang, mỗi trang 1 thanh chạy 5 giây. Nút góc trên phải mờ + vòng đếm lùi: trang 1 = mũi tên sang trang, trang cuối = X; chạy xong mới bấm được. Back bị chặn tới khi được tắt. 10 giây không có ad -> tự đóng.
+```kotlin
+// Nạp sẵn 2 native (app sở hữu)
+val storyAds = List(2) { AdmNativeAd(-1, this, true).also { it.preloadAd() } }
 
-`LIST_AD_ID_IS_EMPTY` · `AD_ID_IS_NOT_EXIST` · `AD_IS_NOT_AVAILABLE` · `AD_IS_EXISTED` (ad full-screen khác đang hiện) · `NETWORK_IS_NOT_AVAILABLE` · `UMP_IS_NOT_ACTIVE` · `ACTIVITY_IS_NOT_AVAILABLE` · `CLIENT_HAVE_SUB` · `CLIENT_HAVE_BEEN_REMOVED_AD` · `OTHER`
+inter.onAdClosed = {
+    runOnUiThread {
+        AdmNativeFullStory(this).apply {
+            onClose = { goNext() }
+        }.show(storyAds)          // không truyền list -> story tự load (adId, adsToLoad)
+    }
+}
+// onDestroy: storyAds.forEach { it.destroyNativeAd() }
+```
+Tuỳ chỉnh: `pages` (mặc định 2), `stepMs` (5000), `adsToLoad`, `layoutNativeAdView` (mặc định `layout_native_ad_full_story`).
 
-### `GlobalVariables`
+### Native PIP — nổi, kéo thả (1.0.28)
+Thẻ 225x238dp trượt vào từ mép, kéo đi theo tay, thả ra hít về góc gần nhất. 1 giây đầu chặn chạm; nút X góc trên trái khoá 3 giây (vòng cam). Bấm ad -> nạp ad mới.
+```kotlin
+private var pip: AdmNativePip? = null
 
-| Cờ | Ý nghĩa |
-|----|---------|
-| `isShowSub` | Còn được hiện màn subscription không (premium → false) |
-| `isShowPopup` | Mutex full-screen ad/dialog đang hiện |
-| `canShowOpenAd` | Có được show app-open không (premium → false) |
+pip = AdmNativePip(this).apply {
+    corner = AdmNativePip.Corner.TOP_RIGHT   // góc xuất hiện
+    reloadOnClick = true
+    onClose = { }
+    show()
+}
 
-### Log tags
+override fun onDestroy() {
+    pip?.dismiss()
+    super.onDestroy()
+}
+```
 
-`AdmUMP` · `GoogleAds/Open` · `GoogleAds/Native` · `GoogleAds/Banner` · `GoogleAds/Inter` · `GoogleAds/Reward` · `GoogleAds/RewardInter` · `GoogleAds/Billing`
+### InterstitialAd
+Show Ad
+```kotlin
+private var interShowActivity2: AdmInterstitialAd? = null
 
-Bật/tắt log mỗi controller qua `enableLogging` (`BillingClient.enableLogging` mặc định `false`).
+interShowActivity2 = AdmInterstitialAd(id = 0, currentActivity = this) // Nếu id = -1 thì sẽ gọi vòng lặp AdmConfigAdId.listInterstitialAdUnitID
+interShowActivity2?.showPopupLoadAds { }
+```
+
+Listener
+```kotlin
+interShowActivity2?.onAdClosed = {
+    runOnUiThread {
+        startActivity(Intent(this@MainActivity, MainActivity2::class.java))
+        }
+    }
+
+interShowActivity2?.onAdFailToLoaded = { admErrorType, errorMessage ->
+    runOnUiThread {
+        Log.d(TAG, admErrorType.name + "," + errorMessage)
+    }
+}
+```
+Sử dụng ***countToShowAds*** với trường hợp đếm tương tác nhiêu nút bấm trên 1 màn hình, với firstShowAd là số lần phải tương tác các nút bấm trong lần đầu tiên để show ad, loopShowAd là số lần khi tương tác lại các nút bấm đó để show lại ad :
+```kotlin
+ interShowActivity2?.countToShowAds(
+    keyCounterAd = MAIN_COUNTER_AD,
+    startAds = 3,
+    loopAds = 2,
+){}
+```
+Muốn reset lại số lần thì sử dụng ***resetCounterAds*** ở ***AppOwner.kt*** :
+```kotlin
+resetCounterAds(MainActivity.MAIN_COUNTER_AD)
+```
+
+Destroy Ad
+```kotlin
+override fun onDestroy() {
+    interShowActivity2 = null
+    super.onDestroy()
+}
+```
+
+### RewardAd
+```kotlin
+private var rewardedAdRemoveAd: AdmRewardAd? = null
+
+rewardedAdRemoveAd = AdmRewardAd(id = 0, currentActivity = this) // Nếu id = -1 thì sẽ gọi vòng lặp AdmConfigAdId.listRewardAdUnitID
+```
+
+Listener
+```kotlin
+rewardedAdRemoveAd?.onHaveReward = {
+    runOnUiThread {
+        PreferencesManager.getInstance().removeAds(true)
+        checkSubToUpdateUI()
+    }
+}
+
+rewardedAdRemoveAd?.onAdFailToLoaded = { admErrorType, errorMessage ->
+    runOnUiThread {
+        Log.d(TAG, admErrorType.name + "," + errorMessage)
+    }
+}
+```
+
+Destroy Ad
+```kotlin
+override fun onDestroy() {
+    rewardedAdRemoveAd = null
+    super.onDestroy()
+}
+```
+
+### OpenAd
+Để xuất hiện OpenAd thì sử dụng ***GlobalVariables.canShowOpenAd = true***. ví dụ:
+```kotlin
+override fun onStart() {
+     super.onStart()
+     GlobalVariables.canShowOpenAd = true
+}
+```
+
+OpenAd ở các màn **Splash, Subscription, OnBoard** ko nên hiện thì để ***GlobalVariables.canShowOpenAd = false***
+
+### Lưu ý
+Xem Reward Remove Ad sử dụng như sau, bỏ remove ad thì set ***false*** :
+```kotlin
+PreferencesManager.getInstance().removeAds(true) // false
+```
+
+Sử dụng isRemoveAds() để check remove ad:
+```kotlin
+PreferencesManager.getInstance().isRemoveAds()
+```
+
+# Sub
+## Cách sử dụng
+Tạo các 4 file Product Id như hình:
+![plot](./images/SubProductId.png)
+
+Tạo 1 **AppOwner.kt** như hình:
+![plot](./images/SubAppOwner.png)
+
+Khởi tạo ***BillingClientLifecycle*** trong các activity
+```kotlin
+private val mBillingClientLifecycle: BillingClientLifecycle? get() { return  (application as AppOwner).mBillingClientLifecycle ?: null}
+```
+
+Gọi ***setListener*** trong onCreate ở các activity như sau:
+```kotlin
+mBillingClientLifecycle?.setListener(this, object : OnBillingListener {
+            override fun onPurchasedProductsFetched(purchaseInfos: List<PurchaseInfo>) {
+                super.onPurchasedProductsFetched(purchaseInfos)
+            }
+        })
+```
+Dùng ***removeListener*** trước finish 1 activity như sau:
+```kotlin
+     mBillingClientLifecycle?.removeListener(this)
+     finish()
+```
+Đối với activity main như sau:
+```kotlin
+override fun onDestroy() {
+     mBillingClientLifecycle?.removeListener(this)
+     super.onDestroy()
+}
+```
+
+Lấy giá item Sub và iap như sau:
+```kotlin
+mBillingClientLifecycle.getSubscriptionPrice(SubscriptionProductId.Weekly.id)
+```
+```kotlin
+mBillingClientLifecycle.getIAPPrice(ConsumableProductId.Lifetime.id)
+```
+
+Mua gói Sub và Lifetime sử dụng như sau:
+```kotlin
+mBillingClientLifecycle.subscribe(this@SubscriptionActivity, ConsumableProductId.Lifetime.id)
+```
+```kotlin
+mBillingClientLifecycle.purchaseLifetime(this@SubscriptionActivity, SubscriptionProductId.Weekly.id)
+```
+
+Sử dụng ***fetchSubPurchasedProducts*** để check Sub có tồn tại ko
+```kotlin
+mBillingClientLifecycle?.fetchSubPurchasedProducts()
+```
+
+Sử dụng isSUB() để check sub:
+```kotlin
+PreferencesManager.getInstance().isSUB()
+```
+

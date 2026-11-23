@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Native COLLAPSIBLE (dùng với AdmNativeCollapsible): media + hàng icon / chữ / nút cài đặt, mũi tên gập
+  (@id/ad_collapse) đè góc trên trái media. Mũi tên KHÔNG đăng ký làm asset ad -> bấm không tính click ad.
+  App muốn tự làm layout riêng: giữ các id ad_* như ad_unified.xml + 1 AdmCountdownButton id ad_collapse.
+-->
+<com.google.android.gms.ads.nativead.NativeAdView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/adm_bg_collapsible_card"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <com.google.android.gms.ads.nativead.MediaView
+                android:id="@+id/ad_media"
+                android:layout_width="match_parent"
+                android:layout_height="150dp" />
+
+            <gs.ad.utils.ads.view.AdmCountdownButton
+                android:id="@+id/ad_collapse"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_gravity="top|start"
+                android:layout_margin="6dp"
+                android:contentDescription="Collapse ad" />
+        </FrameLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:id="@+id/ad_app_icon"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:adjustViewBounds="true"
+                android:scaleType="centerCrop" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/ad_headline"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:textColor="#FFFFFFFF"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/adm_bg_badge_light"
+                        android:paddingStart="4dp"
+                        android:paddingTop="1dp"
+                        android:paddingEnd="4dp"
+                        android:paddingBottom="1dp"
+                        android:text="@string/ad_attribution"
+                        android:textColor="#FF49454F"
+                        android:textSize="11sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <RatingBar
+                        android:id="@+id/ad_stars"
+                        style="?android:attr/ratingBarStyleSmall"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:isIndicator="true"
+                        android:numStars="5"
+                        android:stepSize="0.5" />
+
+                    <TextView
+                        android:id="@+id/ad_store"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:maxLines="1"
+                        android:textColor="#FFB9AED0"
+                        android:textSize="12sp" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/ad_body"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="2"
+                    android:textColor="#FFB9AED0"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/ad_call_to_action"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:background="@drawable/adm_bg_collapsible_cta"
+                android:maxLines="1"
+                android:minWidth="88dp"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:textAllCaps="true"
+                android:textColor="#FF062100"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </LinearLayout>
+</com.google.android.gms.ads.nativead.NativeAdView>
